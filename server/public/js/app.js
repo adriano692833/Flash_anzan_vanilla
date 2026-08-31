@@ -141,6 +141,11 @@ const app = {
     ui: null,
 
     init: function () {
+        // Stopka bierze wersje z APP_VERSION — wpisana recznie rozjezdzala sie po kazdym
+        // wdrozeniu i falszywie sugerowala, ze deploy nie wszedl.
+        const verEl = document.getElementById('app-version');
+        if (verEl) verEl.innerText = 'v' + APP_VERSION;
+
         const s = localStorage.getItem('anzan_v3_user');
         if (s) {
             const d = JSON.parse(s);
