@@ -35,9 +35,11 @@
 
             try {
                 this.setStatus('connecting');
-                // Używamy WebSocket jako preferowany transport dla wydajności
+                // Long-polling jako transport startowy — App Engine standard nie
+                // obsluguje WebSocketow. Socket.IO sprobuje upgrade'u do WS samo,
+                // a gdy sie nie uda, po prostu zostaje przy pollingu (zamiast padac).
                 this.socket = io(SOCKET_URL, {
-                    transports: ['websocket', 'polling'],
+                    transports: ['polling', 'websocket'],
                     reconnection: true,
                     // Instancja App Engine spi (min_instances: 0). 10 prob co 0.5 s konczylo
                     // sie poddaniem, zanim serwer zdazyl wstac — stad "cichy" pusty ekran.

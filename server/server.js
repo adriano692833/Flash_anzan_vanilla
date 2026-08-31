@@ -81,7 +81,9 @@ app.get('/health', async (req, res) => {
 
 const server = http.createServer(app);
 
-// Socket.IO — WebSocket preferred, polling as fallback
+// Socket.IO — long-polling jako podstawa, WebSocket tylko jako opcjonalny upgrade.
+// App Engine *standard* nie przepuszcza WebSocketow (to domena srodowiska flexible /
+// Cloud Run), wiec wymuszanie WS konczylo sie bledem "websocket error" i cisza.
 const io = new Server(server, {
     cors: {
         origin: (origin, callback) => {
@@ -92,7 +94,7 @@ const io = new Server(server, {
         methods: ['GET', 'POST'],
         credentials: true
     },
-    transports: ['websocket', 'polling']
+    transports: ['polling', 'websocket']
 });
 
 // --- Rate limiting (in-memory, per socket+event) ---
