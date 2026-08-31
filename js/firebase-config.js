@@ -7,9 +7,9 @@
 // =====================================================================
 
 window.FIREBASE_CONFIG = {
-    apiKey: "TODO_WKLEJ_API_KEY",
-    authDomain: "TODO_WKLEJ_AUTH_DOMAIN",   // np. anzan-web.firebaseapp.com
-    projectId: "TODO_WKLEJ_PROJECT_ID"
+    apiKey: "AIzaSyBKyPQvaiLkwU-nn6s_POd5obLyymadkU0",
+    authDomain: "anzan-web.firebaseapp.com",
+    projectId: "anzan-web"
 };
 
 // Domena syntetycznych e-maili dla logowania „na nazwę" (uczeń nie musi mieć e-maila).
