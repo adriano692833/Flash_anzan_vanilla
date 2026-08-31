@@ -80,7 +80,7 @@ const KYU_VERSION = 4;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '4.3 Pro';
+const APP_VERSION = '5.0 Pro';
 const APP_UPDATED = '2026-08-31';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -402,13 +402,19 @@ const app = {
     renderChart: function () {
         const ctx = document.getElementById('xp-chart');
         if (!ctx) return;
+
+        // Historia z konta, gdy juz przyszla z serwera — inaczej lokalna (offline).
+        const accHistory = this._profile && this._profile.history;
+        const history = (accHistory && Object.keys(accHistory).length) ? accHistory : this.user.history;
+
         // Mock data if empty
-        if (Object.keys(this.user.history || {}).length === 0) {
+        if (!history || Object.keys(history).length === 0) {
             this.user.history = { [new Date().toISOString().split('T')[0]]: this.user.xp };
         }
 
-        const labels = Object.keys(this.user.history).sort().slice(-7);
-        const data = labels.map(l => this.user.history[l]);
+        const src = (history && Object.keys(history).length) ? history : this.user.history;
+        const labels = Object.keys(src).sort().slice(-7);
+        const data = labels.map(l => src[l]);
 
         if (this.chart) this.chart.destroy();
         this.chart = new Chart(ctx, {
@@ -433,10 +439,13 @@ const app = {
         });
     },
 
-    updateAchievementsUI: function () {
-        const list = document.getElementById('achievements-list');
+    // targetId pozwala wyrenderowac te same odznaki na pulpicie i w profilu.
+    // Statystyki bierzemy z konta, gdy jest znane — inaczej z danych lokalnych.
+    updateAchievementsUI: function (targetId) {
+        const list = document.getElementById(targetId || 'achievements-list');
         if (!list) return;
         list.innerHTML = '';
+        const stats = this._accountStats || { xp: this.user.xp, streak: this.user.streak };
         const badges = [
             { id: 'novice', name: 'Start', icon: '👶', cond: u => u.xp > 50 },
             { id: 'pro', name: 'Pro', icon: '😎', cond: u => u.xp > 1000 },
@@ -445,7 +454,7 @@ const app = {
             { id: 'survivor', name: 'Ocalały', icon: '🛡️', cond: u => this.state.survivalLevel < 9 }
         ];
         badges.forEach(b => {
-            const unlocked = b.cond(this.user);
+            const unlocked = b.cond(stats);
             const d = document.createElement('div');
             d.className = 'glass-card';
             d.style.padding = '0.5rem 0.8rem';
@@ -524,6 +533,15 @@ const app = {
                 if (ok) audio.success(); else audio.error();
 
                 if (!isNaN(xp) && xp > 0) this.user.xp += xp;
+
+                // Tryb solo: zglos trafienie do rankingu treningowego. Stawke ustala
+                // serwer — tu leci wylacznie poziom i fakt trafienia.
+                if (ok && !isAsync && this.multi && typeof this.multi.reportSolo === 'function') {
+                    const kId = this.state.mode === 'survival'
+                        ? (this.state.survivalLevel || 20)
+                        : document.getElementById('game-kyu').value;
+                    this.multi.reportSolo(kId, true);
+                }
 
                 this.save();
                 if (typeof this.updateUI === 'function') this.updateUI();
@@ -918,16 +936,107 @@ const app = {
         if (sp) document.getElementById('info-t').innerText = parseFloat(sp.value);
     },
     updateUI: function () {
-        document.getElementById('user-level').innerText = Math.floor(Math.sqrt(this.user.xp / 100)) + 1;
-        document.getElementById('user-xp').innerText = Math.floor(this.user.xp);
-        document.getElementById('dash-xp').innerText = Math.floor(this.user.xp);
-        document.getElementById('dash-streak').innerText = this.user.streak;
+        // Konto jest zrodlem prawdy. Dane lokalne sluza tylko do czasu, az serwer
+        // przysle profil (i offline) — inaczej pasek boczny pokazywalby dorobek
+        // przegladarki zamiast dorobku ucznia.
+        const stats = this._accountStats || { xp: this.user.xp, streak: this.user.streak };
+        const xp = Math.floor(stats.xp || 0);
 
-        const lvl = Math.floor(Math.sqrt(this.user.xp / 100)) + 1;
+        document.getElementById('user-level').innerText = Math.floor(Math.sqrt(stats.xp / 100)) + 1;
+        document.getElementById('user-xp').innerText = xp;
+        document.getElementById('dash-xp').innerText = xp;
+        document.getElementById('dash-streak').innerText = stats.streak || 0;
+
+        const lvl = Math.floor(Math.sqrt(stats.xp / 100)) + 1;
         const base = Math.pow(lvl - 1, 2) * 100;
         const next = Math.pow(lvl, 2) * 100;
-        const w = Math.min(100, Math.max(0, ((this.user.xp - base) / (next - base)) * 100));
+        const w = Math.min(100, Math.max(0, ((stats.xp - base) / (next - base)) * 100));
         document.getElementById('xp-bar').style.width = w + '%';
+    },
+
+    // --- PROFIL ---
+    // Zrodlem prawdy sa dane konta z serwera (a nie localStorage), zeby postep
+    // byl ten sam na kazdym komputerze ucznia.
+    renderProfile: function (d) {
+        if (!d) return;
+        this._profile = d;
+
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+        const totalXp = (d.totalXp || 0) + (d.soloXp || 0);
+
+        set('prof-name', d.name || '—');
+        set('prof-role', d.role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń');
+        set('prof-class', d.className ? ('Klasa: ' + d.className) : 'Nie należysz jeszcze do klasy');
+        set('prof-mp-xp', Math.floor(d.totalXp || 0));
+        set('prof-solo-xp', Math.floor(d.soloXp || 0));
+        set('prof-class-pts', Math.floor(d.classPoints || 0));
+        set('prof-streak', this._streakFromHistory(d.history));
+
+        const lvl = Math.floor(Math.sqrt(totalXp / 100)) + 1;
+        const base = Math.pow(lvl - 1, 2) * 100;
+        const next = Math.pow(lvl, 2) * 100;
+        set('prof-level', lvl);
+        const bar = document.getElementById('prof-xp-bar');
+        if (bar) bar.style.width = Math.min(100, Math.max(0, ((totalXp - base) / (next - base)) * 100)) + '%';
+        set('prof-xp-text', Math.floor(totalXp) + ' XP — do poziomu ' + (lvl + 1) + ' brakuje ' + Math.max(0, Math.ceil(next - totalXp)) + ' XP');
+
+        this._accountStats = { xp: totalXp, streak: this._streakFromHistory(d.history) };
+        this.updateUI();
+
+        this._renderProfileChart(d.history || {});
+        this.updateAchievementsUI('prof-achievements');
+        this.updateAchievementsUI('achievements-list');
+    },
+
+    // Seria = liczba kolejnych dni (wstecz od dzis) z jakimkolwiek zdobytym XP.
+    _streakFromHistory: function (history) {
+        if (!history) return 0;
+        let streak = 0;
+        const day = new Date();
+        for (let i = 0; i < 400; i++) {
+            const key = day.toISOString().split('T')[0];
+            if ((history[key] || 0) > 0) streak++;
+            else if (i > 0) break; // brak XP dzisiaj nie zeruje serii
+            day.setDate(day.getDate() - 1);
+        }
+        return streak;
+    },
+
+    _renderProfileChart: function (history) {
+        const ctx = document.getElementById('prof-chart');
+        if (!ctx || typeof Chart === 'undefined') return;
+
+        const labels = [];
+        const data = [];
+        const day = new Date();
+        day.setDate(day.getDate() - 13);
+        for (let i = 0; i < 14; i++) {
+            const key = day.toISOString().split('T')[0];
+            labels.push(key.slice(5)); // MM-DD
+            data.push(history[key] || 0);
+            day.setDate(day.getDate() + 1);
+        }
+
+        if (this._profChart) this._profChart.destroy();
+        this._profChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'XP dziennie',
+                    data: data,
+                    backgroundColor: 'rgba(139, 92, 246, 0.55)',
+                    borderColor: '#8b5cf6',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
+        });
     },
 
     // --- SETTINGS ---
@@ -1052,6 +1161,9 @@ function nav(id) {
         // Reset setupu
         document.getElementById('game-setup').style.display = 'block';
         document.getElementById('game-run').style.display = 'none';
+    } else if (id === 'profile') {
+        // Profil zawsze pokazuje swiezy stan konta, nie snapshot sprzed godziny.
+        if (app.multi && typeof app.multi.requestProfile === 'function') app.multi.requestProfile();
     } else if (id === 'worksheet') {
         app.state.mode = 'worksheet'; // FIX: Set mode explicitly so nextTask knows what to do
         // Reset worksheet state

@@ -319,3 +319,28 @@ input[type=number] {
     line-height: 1;
     user-select: none;
 }
+/* --- BRAMKA LOGOWANIA -------------------------------------------------
+   Konto jest wymagane od startu, wiec bramka przykrywa cala aplikacje,
+   dopoki Firebase nie potwierdzi sesji. Domyslnie widoczna — gdyby JS
+   padl, uzytkownik widzi formularz, a nie pusty pulpit z zerowym XP. */
+#login-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    overflow-y: auto;
+    background: radial-gradient(circle at 20% 0%, rgba(139, 92, 246, 0.18), transparent 55%), var(--background);
+}
+
+#login-gate .login-card {
+    width: 100%;
+    max-width: 420px;
+}
+
+/* Aplikacja startuje ukryta i odslania sie dopiero po zalogowaniu. */
+.app-container.is-locked {
+    display: none;
+}

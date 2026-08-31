@@ -42,7 +42,53 @@ async function getUser(uid) {
 // Globalny ranking all-time (tylko punkty z zajęć/multiplayer).
 async function updateUserScore(uid, delta) {
     const userRef = db.collection('users').doc(uid);
-    await userRef.set({ totalXp: Firestore.FieldValue.increment(delta) }, { merge: true });
+    await userRef.set({
+        totalXp: Firestore.FieldValue.increment(delta),
+        history: { [todayKey()]: Firestore.FieldValue.increment(delta) }
+    }, { merge: true });
+}
+
+function todayKey() {
+    return new Date().toISOString().split('T')[0];
+}
+
+// Punkty z treningu solo — CELOWO osobne pole. Ranking "Trening" mierzy
+// pracowitosc, ranking "Zajecia" (totalXp) mierzy umiejetnosc w warunkach
+// kontrolowanych przez nauczyciela. Mieszanie ich pozwoliloby nabic tabele
+// najlatwiejszym poziomem wybranym samodzielnie.
+async function addSoloXp(uid, delta) {
+    const userRef = db.collection('users').doc(uid);
+    await userRef.set({
+        soloXp: Firestore.FieldValue.increment(delta),
+        history: { [todayKey()]: Firestore.FieldValue.increment(delta) },
+        lastActive: Firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+}
+
+async function getSoloLeaderboard(limit = 20) {
+    const snap = await db.collection('users')
+        .orderBy('soloXp', 'desc')
+        .limit(limit)
+        .get();
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+}
+
+// Punkty ucznia w konkretnej klasie (do profilu).
+async function getMemberPoints(classId, uid) {
+    const snap = await db.collection('classes').doc(classId).collection('members').doc(uid).get();
+    return snap.exists ? (snap.data().points || 0) : 0;
+}
+
+// Klasa ucznia do naglowka profilu. Czytamy users/{uid}.classId zapisane przy
+// dolaczeniu — collectionGroup po polu 'uid' nie zadzialaby, bo dokumenty
+// czlonkow trzymaja uid jako ID dokumentu, nie jako pole (i wymagaloby indeksu).
+async function findClassForMember(uid) {
+    const user = await getUser(uid);
+    if (!user || !user.classId) return null;
+    const cls = await getClass(user.classId);
+    if (!cls) return null;
+    const points = await getMemberPoints(user.classId, uid);
+    return { id: cls.id, name: cls.name, points };
 }
 
 // ---------- CLASSES (grupy / rok szkolny) ----------
@@ -87,6 +133,9 @@ async function listClassesByTeacher(teacherUid) {
 // Dopisz ucznia do rosteru klasy (idempotentnie — nie zeruje punktów przy ponownym wejściu).
 async function addClassMember(classId, uid, name) {
     const ref = db.collection('classes').doc(classId).collection('members').doc(uid);
+    // Zapamietaj klase na profilu ucznia — profil czyta ja jednym odczytem,
+    // bez zapytania collectionGroup i bez indeksu zlozonego.
+    await db.collection('users').doc(uid).set({ classId }, { merge: true });
     const snap = await ref.get();
     if (!snap.exists) {
         await ref.set({
@@ -192,5 +241,9 @@ module.exports = {
     getRoom,
     deleteRoom,
     getGlobalLeaderboard,
+    addSoloXp,
+    getSoloLeaderboard,
+    getMemberPoints,
+    findClassForMember,
     healthCheck
 };

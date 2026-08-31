@@ -24,6 +24,9 @@ const {
     updateRoom,
     deleteRoom,
     getGlobalLeaderboard,
+    addSoloXp,
+    getSoloLeaderboard,
+    findClassForMember,
     healthCheck
 } = require('./firestore');
 
@@ -911,6 +914,61 @@ io.on('connection', (socket) => {
     });
 
     // 7. Global leaderboard
+    // --- TRENING SOLO ---
+    // Wynik solo zglasza klient, wiec serwer NIE ufa nadeslanej liczbie punktow:
+    // przyznaje wlasna stawke wg poziomu (im trudniej, tym wiecej) i limituje
+    // czestotliwosc. Te punkty ida wylacznie do rankingu "Trening", nigdy do
+    // rankingu zajec — inaczej dalo by sie nabic tabele latwym poziomem.
+    socket.on('solo_result', async ({ kyuId, correct }) => {
+        if (!checkRateLimit(socket.id, 'solo_result', 30, 60000)) return;
+        if (!requireAuth()) return;
+        if (!correct) return;
+
+        // Kyu 20 = najlatwiejsze, Kyu 1 = najtrudniejsze.
+        const k = Number.parseInt(kyuId, 10);
+        if (!Number.isFinite(k) || k < 1 || k > 20) return;
+        const xp = Math.max(1, Math.min(12, Math.round(1 + (20 - k) * 0.55)));
+
+        try {
+            await addSoloXp(socket.uid, xp);
+            socket.emit('solo_xp_awarded', { xp });
+        } catch (e) {
+            console.error('[solo_result] Firestore error:', e.message);
+        }
+    });
+
+    socket.on('request_solo_leaderboard', async () => {
+        if (!checkRateLimit(socket.id, 'request_solo_leaderboard', 2, 10000)) return;
+        try {
+            const board = await getSoloLeaderboard(20);
+            socket.emit('solo_leaderboard', { board });
+        } catch (e) {
+            socket.emit('solo_leaderboard', { board: [] });
+        }
+    });
+
+    // --- PROFIL ---
+    socket.on('request_profile', async () => {
+        if (!checkRateLimit(socket.id, 'request_profile', 5, 10000)) return;
+        if (!requireAuth()) return;
+        try {
+            const user = await getUser(socket.uid);
+            const cls = await findClassForMember(socket.uid);
+            socket.emit('profile_data', {
+                name: (user && user.name) || socket.data.name,
+                role: socket.data.role,
+                totalXp: (user && user.totalXp) || 0,
+                soloXp: (user && user.soloXp) || 0,
+                history: (user && user.history) || {},
+                className: cls ? cls.name : '',
+                classPoints: cls ? cls.points : 0
+            });
+        } catch (e) {
+            console.error('[request_profile] error:', e.message);
+            socket.emit('error_msg', 'Nie udało się wczytać profilu.');
+        }
+    });
+
     socket.on('request_global_leaderboard', async () => {
         if (!checkRateLimit(socket.id, 'request_global_leaderboard', 2, 10000)) return;
         try {

@@ -115,8 +115,11 @@
 
         _onLoggedIn: function () {
             this._toggleAuthUI(true);
+            const name = this.user.name || '';
             const badge = document.getElementById('auth-user-badge');
-            if (badge) badge.innerText = '👤 ' + (this.user.name || '');
+            if (badge) badge.innerText = '👤 ' + name;
+            const side = document.getElementById('side-user-name');
+            if (side) side.innerText = name;
             // Po przeladowaniu strony _pendingRole jest pusty — bez tego nauczyciel
             // prosilby o role 'student'. Kod nauczyciela NIE jest zapamietywany.
             const role = this._pendingRole || this._recallRole();
@@ -135,15 +138,23 @@
             catch (e) { return 'student'; }
         },
 
-        // Logowanie NIE blokuje całej aplikacji — dotyczy tylko sekcji multiplayer/ranking.
-        // Tryby solo (Flash/Arkusz/Survival) działają bez konta.
+        // Konto jest wymagane od startu: bez zalogowania nie ma dostepu do zadnego
+        // trybu. Dzieki temu XP, seria i historia naleza do ucznia, a nie do
+        // przegladarki — postep chodzi za nim miedzy komputerami.
         _showAuthScreen: function (show) { this._toggleAuthUI(!show); },
 
         _toggleAuthUI: function (loggedIn) {
-            const login = document.getElementById('mp-login');
-            const authed = document.getElementById('mp-authed');
-            if (login) login.style.display = loggedIn ? 'none' : 'block';
-            if (authed) authed.style.display = loggedIn ? 'block' : 'none';
+            const gate = document.getElementById('login-gate');
+            const shell = document.querySelector('.app-container');
+            if (gate) gate.style.display = loggedIn ? 'none' : 'flex';
+            if (shell) shell.classList.toggle('is-locked', !loggedIn);
+
+            const nameEl = document.getElementById('side-user-name');
+            if (nameEl) nameEl.innerText = loggedIn ? (this.user && this.user.name) || '—' : '—';
+            if (!loggedIn) {
+                const roleEl = document.getElementById('side-role-badge');
+                if (roleEl) roleEl.style.display = 'none';
+            }
         }
     };
 

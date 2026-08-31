@@ -116,6 +116,8 @@
                 if (d.role === 'teacher') this.loadClasses();
                 this.updateAuthUI(d.role);
                 this.setStatus('online');
+                // Pasek boczny ma pokazywac dorobek konta od razu po zalogowaniu.
+                this.requestProfile();
             });
 
             s.on('auth_error', (d) => {
@@ -137,6 +139,27 @@
             });
             s.on('class_leaderboard', (d) => this.renderLeaderboard('class', d.board || []));
             s.on('global_leaderboard', (d) => this.renderLeaderboard('global', d.board || []));
+            s.on('solo_leaderboard', (d) => this.renderLeaderboard('solo', d.board || []));
+            s.on('profile_data', (d) => app.renderProfile(d));
+            s.on('solo_xp_awarded', (d) => {
+                // Punkty treningowe przyznaje serwer. Doliczamy je od razu lokalnie,
+                // zeby pasek XP reagowal natychmiast, bez odpytywania profilu po
+                // kazdym zadaniu.
+                const xp = (d && d.xp) || 0;
+                if (!xp) return;
+                if (app._accountStats) {
+                    app._accountStats.xp += xp;
+                    app.updateUI();
+                }
+                if (app._profile) {
+                    app._profile.soloXp = (app._profile.soloXp || 0) + xp;
+                    const today = new Date().toISOString().split('T')[0];
+                    app._profile.history = app._profile.history || {};
+                    app._profile.history[today] = (app._profile.history[today] || 0) + xp;
+                    const screen = document.getElementById('profile');
+                    if (screen && screen.style.display === 'block') app.renderProfile(app._profile);
+                }
+            });
             s.on('class_members', (d) => this.renderClassMembers(d.classId, d.members || []));
             s.on('member_password_reset', (d) => {
                 app.ui.modal('Hasło zresetowane', `Nowe tymczasowe hasło ucznia:<br><b style="font-size:1.4rem; color:var(--accent)">${he(d.tempPassword)}</b><br><span style="font-size:0.85rem">Przekaż je uczniowi — po zalogowaniu może grać dalej.</span>`);
@@ -480,12 +503,38 @@
             this.init();
             this.socket.emit('request_global_leaderboard');
         },
+        requestSoloLeaderboard: function () {
+            this.init();
+            this.socket.emit('request_solo_leaderboard');
+        },
+        requestProfile: function () {
+            this.init();
+            this.socket.emit('request_profile');
+        },
+        // Zgloszenie poprawnej odpowiedzi w trybie solo. Wysylamy tylko poziom i fakt
+        // trafienia — stawke punktowa wylicza serwer (klient moze edytowac poziomy).
+        reportSolo: function (kyuId, correct) {
+            if (!correct) return;
+            if (!this.socket || !this.socket.connected) return;
+            const k = Number.parseInt(kyuId, 10);
+            if (!Number.isFinite(k) || k < 1 || k > 20) return;
+            this.socket.emit('solo_result', { kyuId: k, correct: true });
+        },
         renderLeaderboard: function (scope, board) {
             const el = document.getElementById('leaderboard-body');
             const title = document.getElementById('leaderboard-title');
-            if (title) title.innerText = scope === 'class' ? '🏆 Ranking klasy' : '🌍 Ranking globalny';
+            const titles = {
+                class: '🏆 Ranking klasy',
+                global: '🌍 Zajęcia — ranking globalny',
+                solo: '🏋️ Trening solo — ranking globalny'
+            };
+            if (title) title.innerText = titles[scope] || titles.global;
             if (!el) return;
-            const pts = (p) => scope === 'class' ? (p.points || 0) : (p.totalXp || 0);
+            const pts = (p) => {
+                if (scope === 'class') return p.points || 0;
+                if (scope === 'solo') return p.soloXp || 0;
+                return p.totalXp || 0;
+            };
             const rows = (board || []).slice(0, 50);
             el.innerHTML = rows.length
                 ? rows.map((p, i) => `
@@ -501,19 +550,23 @@
             if (t) t.style.display = role === 'teacher' ? 'block' : 'none';
             if (s) s.style.display = role === 'teacher' ? 'none' : 'block';
 
-            const badge = document.getElementById('auth-role-badge');
-            if (badge) {
-                badge.innerText = role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń';
+            const label = role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń';
+            ['auth-role-badge', 'side-role-badge'].forEach((id) => {
+                const badge = document.getElementById(id);
+                if (!badge) return;
+                badge.innerText = label;
                 badge.style.display = 'inline-block';
                 badge.style.borderColor = role === 'teacher' ? 'var(--accent)' : 'var(--glass-border)';
-            }
+            });
         },
 
         // Stan polaczenia z serwerem gier — widoczny na ekranie, zeby cicha awaria
         // (uspiona instancja, wygasly token) nie wygladala jak pusty ekran.
         setStatus: function (state, text) {
-            const el = document.getElementById('mp-conn-status');
-            if (!el) return;
+            const els = ['mp-conn-status', 'side-conn-status']
+                .map((id) => document.getElementById(id))
+                .filter(Boolean);
+            if (!els.length) return;
             const map = {
                 idle:       ['var(--text-muted)', 'Nie połączono'],
                 connecting: ['#f59e0b', 'Łączenie z serwerem…'],
@@ -522,8 +575,8 @@
                 error:      ['#ef4444', 'Błąd połączenia']
             };
             const [color, deflt] = map[state] || map.idle;
-            el.style.color = color;
-            el.innerHTML = '<span style="font-size:0.7em; vertical-align:middle">●</span> ' + he(text || deflt);
+            const html = '<span style="font-size:0.7em; vertical-align:middle">●</span> ' + he(text || deflt);
+            els.forEach((el) => { el.style.color = color; el.innerHTML = html; });
         },
 
         startGame: function () {
