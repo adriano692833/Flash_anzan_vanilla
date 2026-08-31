@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// Cały dostęp do danych aplikacji idzie przez serwer (Firebase Admin SDK,
+// który omija te reguły). Klient NIE łączy się z Firestore bezpośrednio —
+// używa tylko Firebase Authentication. Dlatego blokujemy dostęp klienta do bazy.
+//
+// Wdrożenie: firebase deploy --only firestore:rules
+// (lub wklej w konsoli: Firestore Database → Rules).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

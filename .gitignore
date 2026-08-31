@@ -1,0 +1,28 @@
+# Zależności
+node_modules/
+server/node_modules/
+
+# Logi
+*.log
+npm-debug.log*
+
+# Sekrety / poświadczenia (NIE commitować kluczy serwisowych)
+*serviceAccount*.json
+*service-account*.json
+.env
+.env.*
+
+# System / edytor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Pliki tymczasowe
+*.tmp
+
+# Duże zdjęcia referencyjne (66 MB) — trzymane osobno, nie w repo kodu
+kyu 9/
+*.jpg
+*.jpeg
+*.png

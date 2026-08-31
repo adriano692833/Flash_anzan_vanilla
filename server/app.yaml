@@ -1,0 +1,11 @@
+runtime: nodejs22
+env: standard
+instance_class: F1
+
+# max_instances MUST stay at 1: all room state is in-memory.
+# Increasing this without a shared state store (e.g. Redis) would
+# split players across instances and break multiplayer.
+automatic_scaling:
+  min_instances: 1
+  max_instances: 1
+  target_cpu_utilization: 0.65
