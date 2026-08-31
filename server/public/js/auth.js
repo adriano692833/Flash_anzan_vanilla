@@ -10,6 +10,7 @@
     if (typeof window === 'undefined') return;
 
     const app = window.app || (window.app = {});
+    const ROLE_INTENT_KEY = 'anzan_role_intent';
     const auth = {
         user: null,          // { uid, name, role }
         _fbUser: null,
@@ -19,6 +20,13 @@
         _emailFor: function (username) {
             const u = String(username || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
             return u + '@' + (window.ANZAN_USER_EMAIL_DOMAIN || 'students.anzan.local');
+        },
+
+        // Nazwa konta: displayName, a gdy go brak — czesc lokalna syntetycznego e-maila
+        // (czyli nazwa uzytkownika podana przy rejestracji).
+        _nameOf: function (fbUser) {
+            if (!fbUser) return 'Uczeń';
+            return fbUser.displayName || String(fbUser.email || '').split('@')[0] || 'Uczeń';
         },
 
         init: function () {
@@ -35,7 +43,11 @@
                 this._fbUser = fbUser;
                 this.ready = true;
                 if (fbUser) {
-                    this.user = { uid: fbUser.uid, name: fbUser.displayName || 'Uczeń' };
+                    this.user = { uid: fbUser.uid, name: this._nameOf(fbUser) };
+                    // Podczas rejestracji displayName jeszcze nie istnieje — rejestracje na
+                    // serwerze odpalamy dopiero po updateProfile(), inaczej do Firestore
+                    // trafialaby nazwa zastepcza ("Uczen") dla kazdego konta.
+                    if (this._suppressAutoRegister) return;
                     this._onLoggedIn();
                 } else {
                     this.user = null;
@@ -52,13 +64,20 @@
 
         register: async function (username, password, role, teacherCode) {
             const email = this._emailFor(username);
+            this._suppressAutoRegister = true;
             try {
                 const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
                 await cred.user.updateProfile({ displayName: username });
+                this._fbUser = cred.user;
+                this.user = { uid: cred.user.uid, name: username };
                 this._pendingRole = role;
                 this._pendingTeacherCode = teacherCode;
+                this._rememberRole(role);
                 app.ui && app.ui.toast && app.ui.toast('Konto utworzone!', 'success');
+                this._suppressAutoRegister = false;
+                this._onLoggedIn();
             } catch (e) {
+                this._suppressAutoRegister = false;
                 app.ui && app.ui.toast && app.ui.toast('Rejestracja: ' + this._friendly(e), 'error');
                 throw e;
             }
@@ -70,6 +89,7 @@
                 await firebase.auth().signInWithEmailAndPassword(email, password);
                 this._pendingRole = role;
                 this._pendingTeacherCode = teacherCode;
+                this._rememberRole(role);
             } catch (e) {
                 app.ui && app.ui.toast && app.ui.toast('Logowanie: ' + this._friendly(e), 'error');
                 throw e;
@@ -77,6 +97,7 @@
         },
 
         logout: async function () {
+            try { localStorage.removeItem(ROLE_INTENT_KEY); } catch (e) { /* ignore */ }
             try { await firebase.auth().signOut(); } catch (e) { /* ignore */ }
             if (app.multi && app.multi.socket) app.multi.leaveRoom && app.multi.leaveRoom();
             location.reload();
@@ -94,12 +115,24 @@
 
         _onLoggedIn: function () {
             this._toggleAuthUI(true);
-            // Połącz i zarejestruj się na serwerze gier z tokenem + rolą.
-            if (app.multi && typeof app.multi.authenticate === 'function') {
-                app.multi.authenticate(this._pendingRole, this._pendingTeacherCode);
-            }
             const badge = document.getElementById('auth-user-badge');
             if (badge) badge.innerText = '👤 ' + (this.user.name || '');
+            // Po przeladowaniu strony _pendingRole jest pusty — bez tego nauczyciel
+            // prosilby o role 'student'. Kod nauczyciela NIE jest zapamietywany.
+            const role = this._pendingRole || this._recallRole();
+            // Połącz i zarejestruj się na serwerze gier z tokenem + rolą.
+            if (app.multi && typeof app.multi.authenticate === 'function') {
+                app.multi.authenticate(role, this._pendingTeacherCode);
+            }
+        },
+
+        _rememberRole: function (role) {
+            try { localStorage.setItem(ROLE_INTENT_KEY, role === 'teacher' ? 'teacher' : 'student'); }
+            catch (e) { /* ignore */ }
+        },
+        _recallRole: function () {
+            try { return localStorage.getItem(ROLE_INTENT_KEY) || 'student'; }
+            catch (e) { return 'student'; }
         },
 
         // Logowanie NIE blokuje całej aplikacji — dotyczy tylko sekcji multiplayer/ranking.

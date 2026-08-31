@@ -377,7 +377,11 @@ io.on('connection', (socket) => {
         }
 
         const uid = decoded.uid;
-        const safeName = sanitizeName(name || decoded.name || 'Uczeń');
+        // Fallback nazwy: displayName z klienta -> claim z tokenu -> czesc lokalna
+        // syntetycznego e-maila (nazwa uzytkownika). "Uczen" to ostatnia deska ratunku.
+        const safeName = sanitizeName(
+            name || decoded.name || String(decoded.email || '').split('@')[0] || 'Uczeń'
+        );
         const safeAvatar = sanitizeAvatar(avatar);
 
         // Rola nauczyciela tylko z poprawnym kodem dostępu.
@@ -394,7 +398,11 @@ io.on('connection', (socket) => {
             const stored = await getUser(uid);
             if (stored && stored.role) effectiveRole = stored.role;
         } catch (e) {
+            // Bez profilu z Firestore nie znamy autorytatywnej roli — cicha degradacja
+            // do 'student' pokazywala nauczycielowi panel ucznia. Lepiej powiedziec wprost.
             console.error('[register] Firestore error:', e.message);
+            socket.emit('auth_error', { message: 'Serwer nie odczytał Twojego profilu — odśwież stronę.' });
+            return;
         }
 
         socket.uid = uid;

@@ -22,24 +22,35 @@
         roomLocked: false, // Stan lokalny blokady
 
         init: function () {
+            // Socket juz istnieje: nigdy nie gubimy referencji (to zostawialo zombie
+            // polaczenie i tworzylo drugie). Jesli jest rozlaczony, budzimy go i czekamy
+            // na asynchroniczne 'connect'.
             if (this.socket) {
-                if (this.socket.connected) return;
-                try { this.socket.connect(); } catch (e) { /* ignore */ }
-                if (this.socket.connected) return;
-                this.socket = null;
+                if (!this.socket.connected) {
+                    this.setStatus('connecting');
+                    try { this.socket.connect(); } catch (e) { /* ignore */ }
+                }
+                return;
             }
 
             try {
+                this.setStatus('connecting');
                 // Używamy WebSocket jako preferowany transport dla wydajności
                 this.socket = io(SOCKET_URL, {
                     transports: ['websocket', 'polling'],
                     reconnection: true,
-                    reconnectionAttempts: 10,
+                    // Instancja App Engine spi (min_instances: 0). 10 prob co 0.5 s konczylo
+                    // sie poddaniem, zanim serwer zdazyl wstac — stad "cichy" pusty ekran.
+                    reconnectionAttempts: Infinity,
                     reconnectionDelay: 500,
-                    timeout: 10000
+                    reconnectionDelayMax: 5000,
+                    timeout: 20000
                 });
                 this.setupHandlers();
-            } catch (e) { app.ui.toast('Błąd połączenia z serwerem gier.', 'error'); }
+            } catch (e) {
+                this.setStatus('error', 'Nie udało się połączyć z serwerem gier.');
+                app.ui.toast('Błąd połączenia z serwerem gier.', 'error');
+            }
         },
 
         // Połącz i zarejestruj się na serwerze tokenem Firebase. Wołane po zalogowaniu.
@@ -75,24 +86,40 @@
 
             s.on('connect', () => {
                 console.log('Connected to server');
+                this._connectErrors = 0;
+                this.setStatus('connecting', 'Łączenie… (uwierzytelnianie)');
                 // Zawsze (re)rejestruj tożsamość po połączeniu.
                 this._sendRegister();
             });
 
             s.on('connect_error', (err) => {
-                console.warn('Connect error:', err && err.message ? err.message : err);
+                const msg = err && err.message ? err.message : String(err);
+                console.warn('Connect error:', msg);
+                this._connectErrors = (this._connectErrors || 0) + 1;
+                // Instancja App Engine usypia (min_instances: 0), wiec pierwsze proby po
+                // przerwie sa normalne — nie straszymy uzytkownika od razu.
+                if (this._connectErrors === 3) {
+                    this.setStatus('error', 'Serwer się wybudza — chwilę to potrwa…');
+                    app.ui.toast('Serwer się wybudza, poczekaj chwilę…', 'info');
+                } else if (this._connectErrors > 3) {
+                    this.setStatus('error', 'Brak połączenia z serwerem (' + msg + ')');
+                }
             });
 
             s.on('registered', (d) => {
                 this.myRole = d.role;
                 this.myUid = d.uid;
+                this._connectErrors = 0;
                 // Odśwież listę klas nauczyciela / widok po zalogowaniu.
                 if (d.role === 'teacher') this.loadClasses();
                 this.updateAuthUI(d.role);
+                this.setStatus('online');
             });
 
             s.on('auth_error', (d) => {
-                app.ui.toast((d && d.message) || 'Błąd logowania.', 'error');
+                const m = (d && d.message) || 'Błąd logowania.';
+                this.setStatus('error', m);
+                app.ui.toast(m, 'error');
             });
 
             // --- KLASY I RANKING ---
@@ -117,7 +144,10 @@
             s.on('disconnect', (reason) => {
                 console.warn('Disconnected:', reason);
                 if (reason !== 'io client disconnect') {
-                    this.leaveRoom(); // Czyste wyjście przy zerwaniu
+                    // Zerwanie laczy != wyjscie z pokoju. leaveRoom() zerowalo this.socket,
+                    // co na stale wylaczalo automatyczne ponawianie Socket.IO — po pierwszym
+                    // uspieniu instancji ekran zostawal pusty i cichy az do przeladowania.
+                    this._handleDisconnect(reason);
                 }
             });
 
@@ -223,7 +253,9 @@
                         {
                             label: 'OK',
                             primary: true,
-                            onClick: () => { this.leaveRoom(); }
+                            // Wyrzucony z pokoju != wylogowany — socket zostaje, zeby
+                            // uczen mogl od razu dolaczyc ponownie.
+                            onClick: () => { this._resetRoomState(); }
                         }
                     ]);
                 } else {
@@ -466,6 +498,30 @@
             const s = document.getElementById('student-panel');
             if (t) t.style.display = role === 'teacher' ? 'block' : 'none';
             if (s) s.style.display = role === 'teacher' ? 'none' : 'block';
+
+            const badge = document.getElementById('auth-role-badge');
+            if (badge) {
+                badge.innerText = role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń';
+                badge.style.display = 'inline-block';
+                badge.style.borderColor = role === 'teacher' ? 'var(--accent)' : 'var(--glass-border)';
+            }
+        },
+
+        // Stan polaczenia z serwerem gier — widoczny na ekranie, zeby cicha awaria
+        // (uspiona instancja, wygasly token) nie wygladala jak pusty ekran.
+        setStatus: function (state, text) {
+            const el = document.getElementById('mp-conn-status');
+            if (!el) return;
+            const map = {
+                idle:       ['var(--text-muted)', 'Nie połączono'],
+                connecting: ['#f59e0b', 'Łączenie z serwerem…'],
+                online:     ['#22c55e', 'Połączono'],
+                offline:    ['#f59e0b', 'Brak połączenia — ponawiam…'],
+                error:      ['#ef4444', 'Błąd połączenia']
+            };
+            const [color, deflt] = map[state] || map.idle;
+            el.style.color = color;
+            el.innerHTML = '<span style="font-size:0.7em; vertical-align:middle">●</span> ' + he(text || deflt);
         },
 
         startGame: function () {
@@ -505,8 +561,9 @@
             this.socket.emit('join_room', { code: c });
         },
 
-        leaveRoom: function () {
-            // Cleanup timer
+        // Sprzatanie stanu pokoju — WSPOLNE dla swiadomego wyjscia i dla zerwania laczy.
+        // Nie dotyka this.socket.
+        _resetRoomState: function () {
             if (this.timerInterval) {
                 clearInterval(this.timerInterval);
                 this.timerInterval = null;
@@ -515,13 +572,6 @@
             const timerDisplay = document.getElementById('lobby-timer');
             if (timerDisplay) timerDisplay.innerText = "⏳ --";
 
-            // Disconnect
-            if (this.socket) {
-                this.socket.disconnect();
-                this.socket = null;
-            }
-
-            // Reset state
             this.roomCode = '';
             this.role = '';
             this.isHost = false;
@@ -534,6 +584,26 @@
             if (app.ui.showTeacherLiveView) app.ui.showTeacherLiveView(false);
 
             this.showSelection();
+        },
+
+        // Zerwanie polaczenia (sie padla, instancja usnela). Socket zostaje przy zyciu,
+        // zeby Socket.IO samo sie wpielo z powrotem i ponowilo rejestracje w 'connect'.
+        _handleDisconnect: function (reason) {
+            const wasInRoom = !!this.roomCode;
+            this._resetRoomState();
+            this.setStatus('offline');
+            if (wasInRoom) app.ui.toast('Utracono połączenie — wracam do serwera…', 'warning');
+        },
+
+        // Swiadome wyjscie uzytkownika (przycisk „Opuść Pokój" / wylogowanie).
+        leaveRoom: function () {
+            this._resetRoomState();
+            if (this.socket) {
+                this.socket.disconnect();
+                this.socket = null;
+            }
+            this._socketBound = null;
+            this.setStatus('idle');
         },
 
         // --- UI UPDATES ---
