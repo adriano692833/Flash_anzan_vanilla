@@ -80,7 +80,7 @@ const KYU_VERSION = 4;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '4.2 Pro';
+const APP_VERSION = '4.3 Pro';
 const APP_UPDATED = '2026-08-31';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -300,10 +300,17 @@ const app = {
         }
 
         // FORCE NEW NUMBERS if starting from Local Setup Screen (user might have changed config)
+        // UWAGA: runda sterowana serwerem (multiplayer) NIGDY nie moze tu wpasc — liczby
+        // przychodza w 'task_update' i sa wspolne dla calego pokoju. Wczesniej warunek
+        // opieral sie wylacznie na widocznosci #game-setup, ktory przed pierwsza gra ma
+        // style.display === '' (a nie 'none'), wiec pierwsza runda multiplayera kasowala
+        // liczby z serwera i kazdy gracz losowal wlasne.
+        const serverDriven = !!(this.adapter && this.adapters && this.adapter !== this.adapters.local);
         const setupEl = document.getElementById('game-setup');
-        const fromLocalSetup = setupEl && setupEl.style.display !== 'none';
+        const fromLocalSetup = !serverDriven && setupEl && setupEl.style.display !== 'none';
         if (fromLocalSetup) {
             this.state.nums = [];
+            this.state.sum = null;
         }
 
         // Survival Logic override
@@ -329,6 +336,9 @@ const app = {
             if (!this.state.nums || this.state.nums.length === 0) {
                 // Nowe wywołanie generatora
                 this.state.nums = this.generateValidSequence(cfg);
+                // Nowa sekwencja => stary wynik jest nieaktualny. Bez tego kolejna runda
+                // porownywala odpowiedz z suma rundy poprzedniej.
+                this.state.sum = null;
             }
 
             // Calc result based on mode (only if not already set)
