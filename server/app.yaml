@@ -2,10 +2,19 @@ runtime: nodejs22
 env: standard
 instance_class: F1
 
+# Kod dostępu dla roli nauczyciela (wymagany przy rejestracji jako nauczyciel).
+# ZMIEŃ na własny. Uwaga: jeśli ustawiasz repo tymczasowo na Public przy deployu,
+# ta wartość jest widoczna — trzymaj repo Private albo podmień kod w Cloud Shell
+# przed 'gcloud app deploy'.
+env_variables:
+  TEACHER_ACCESS_CODE: "Soroban-Nauczyciel-2025"
+
 # max_instances MUST stay at 1: all room state is in-memory.
 # Increasing this without a shared state store (e.g. Redis) would
 # split players across instances and break multiplayer.
+# min_instances: 0 -> maszyna "śpi" między zajęciami (blisko darmowo);
+# pierwszy uczeń po przerwie czeka ~1-3 s na rozgrzanie (cold start).
 automatic_scaling:
-  min_instances: 1
+  min_instances: 0
   max_instances: 1
   target_cpu_utilization: 0.65
