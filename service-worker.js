@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flash-anzan-school-7.1';
+const CACHE_NAME = 'flash-anzan-school-7.1.1';
 const APP_SHELL = [
   '/', '/index.html', '/manifest.webmanifest', '/icons/anzan-pro.svg',
   '/css/app.css', '/css/mobile.css', '/js/firebase-config.js', '/js/config.js',
@@ -14,6 +14,10 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))));
   self.clients.claim();
+});
+
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {

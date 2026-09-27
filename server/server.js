@@ -241,7 +241,14 @@ app.post('/api/auth/password-reset', async (req, res) => {
     return res.json({ accepted: true });
 });
 
-app.use(express.static('public'));
+app.use(express.static('public', {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('service-worker.js')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Service-Worker-Allowed', '/');
+        }
+    }
+}));
 
 // Placeholder so rooms is accessible to health endpoint below
 const rooms = Object.create(null);
@@ -2010,4 +2017,11 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // --- Start ---
-server.listen(PORT, () => console.log(`[SERVER] Anzan listening on port ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`[SERVER] Anzan listening on port ${PORT}`);
+    if (process.env.GAE_SERVICE) {
+        firebaseAuth.createCustomToken('runtime-token-signing-check')
+            .then(() => console.info('[auth-signing] service account token signing: OK'))
+            .catch(error => console.error('[auth-signing] service account token signing failed:', error.code || error.message));
+    }
+});
