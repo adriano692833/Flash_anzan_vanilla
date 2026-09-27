@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#7c3aed">
-    <meta name="description" content="Anzan Pro — platforma treningu sorobanu i matematyki mentalnej dla szkół.">
-    <title>Anzan School Pro — matematyka mentalna dla szkół</title>
+    <meta name="theme-color" content="#0b1f3a">
+    <meta name="description" content="Flash Anzan — nowoczesna platforma treningu sorobanu i matematyki mentalnej dla szkół.">
+    <title>Flash Anzan — trening sorobanu dla szkół</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/anzan-pro.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -25,10 +25,31 @@
     <!-- BRAMKA LOGOWANIA — konto jest wymagane od startu, zeby postep, historia
          i rankingi byly zwiazane z uczniem, a nie z przegladarka. -->
     <div id="login-gate">
+        <section class="login-story" aria-label="Flash Anzan — trening matematyki mentalnej">
+            <div class="brand-lockup brand-lockup--hero">
+                <img src="icons/anzan-pro.svg" alt="" width="54" height="54">
+                <div>
+                    <span>FLASH ANZAN</span>
+                    <small>SOROBAN EDUCATION</small>
+                </div>
+            </div>
+            <div class="login-story-copy">
+                <div class="eyebrow"><span></span> TRENING INSPIROWANY METODĄ ISHIDO-SHIKI</div>
+                <h1>Widzieć liczby.<br><em>Myśleć obrazem.</em></h1>
+                <p>Nowoczesna przestrzeń do nauki sorobanu, koncentracji i szybkiego liczenia w pamięci.</p>
+                <div class="method-pills">
+                    <span>算 Soroban</span>
+                    <span>暗算 Anzan</span>
+                    <span>集中 Koncentracja</span>
+                </div>
+            </div>
+            <div class="japanese-seal" aria-hidden="true"><strong>暗算</strong><span>ANZAN</span></div>
+        </section>
         <div class="login-card glass-card">
-            <div style="text-align:center; margin-bottom:1.5rem;">
-                <div style="font-size:2rem; font-weight:700; color:var(--primary);">🧮 Anzan School Pro</div>
-                <div style="color:var(--text-muted); font-size:0.9rem; margin-top:0.35rem;">Soroban i matematyka mentalna dla szkół</div>
+            <div class="login-heading">
+                <span class="login-heading-kicker">WITAJ PONOWNIE</span>
+                <h2>Wejdź do swojej szkoły</h2>
+                <p>Soroban i matematyka mentalna w jednym miejscu.</p>
             </div>
             <label class="stat-label">Nazwa użytkownika</label>
             <input type="text" id="auth-username" class="input-lg" placeholder="np. ania2016"
@@ -58,7 +79,13 @@
 
     <div class="app-container is-locked">
         <aside class="sidebar">
-            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">🧮 Anzan School</div>
+            <div class="brand-lockup">
+                <img src="icons/anzan-pro.svg" alt="" width="44" height="44">
+                <div>
+                    <span>FLASH ANZAN</span>
+                    <small>ISHIDO-SHIKI SCHOOL</small>
+                </div>
+            </div>
 
             <div style="border-top: 1px solid var(--glass-border); padding-top: 1rem;">
                 <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
@@ -92,9 +119,15 @@
 
         <main class="main-content">
             <div id="dashboard" class="screen active">
-                <h1 style="margin-bottom: 2rem;">Witaj! 👋</h1>
-                <div class="glass-card"
-                    style="margin-bottom: 2rem; display: flex; justify-content: space-around; text-align: center;">
+                <section class="dashboard-hero">
+                    <div>
+                        <div class="eyebrow"><span></span> ISHIDO-SHIKI TRAINING PLATFORM</div>
+                        <h1>Trenuj koncentrację.<br><em>Myśl szybciej.</em></h1>
+                        <p>Codzienna praktyka sorobanu buduje pewność, pamięć i matematyczną wyobraźnię.</p>
+                    </div>
+                    <div class="hero-mark" aria-hidden="true"><strong>暗算</strong><span>FLASH ANZAN</span></div>
+                </section>
+                <div class="glass-card training-stats">
                     <div>
                         <div style="font-size: 2rem; font-weight: bold;" id="dash-streak">0</div>
                         <div style="color: var(--text-muted)">Dni z rzędu</div>
@@ -104,20 +137,16 @@
                         <div style="color: var(--text-muted)">Total XP</div>
                     </div>
                 </div>
-                <div style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-                    <button class="btn btn-primary" onclick="nav('flash')" style="height: 100px; font-size: 1.2rem;">⚡
-                        Start Flash</button>
-                    <button class="btn btn-primary" onclick="nav('spoken')"
-                        style="height: 100px; font-size: 1.2rem; background: var(--accent); color: black;">🗣️ Start
-                        Głos</button>
-                    <button class="btn btn-primary" onclick="app.startSurvival()"
-                        style="height: 100px; font-size: 1.2rem; background: var(--error); color: white;">🔥 Tryb
-                        Survival</button>
-                    <button class="btn btn-primary" onclick="nav('multiplayer')"
-                        style="height: 100px; font-size: 1.2rem; background: #6f42c1; color: white;">🌐
-                        Multiplayer</button>
-                    <button class="btn btn-primary" onclick="nav('worksheet')"
-                        style="height: 100px; font-size: 1.2rem; background: var(--secondary);">📝 Start Arkusz</button>
+                <div class="section-heading">
+                    <div><span>WYBIERZ TRENING</span><h2>Gotowy na sesję?</h2></div>
+                    <small>少しずつ、毎日 · Małymi krokami, codziennie</small>
+                </div>
+                <div class="mode-grid">
+                    <button class="mode-card mode-card--flash" onclick="nav('flash')"><span class="mode-icon">⚡</span><span><b>Flash Anzan</b><small>Szybkie obrazy liczb</small></span><i>→</i></button>
+                    <button class="mode-card mode-card--voice" onclick="nav('spoken')"><span class="mode-icon">声</span><span><b>Trening głosowy</b><small>Licz ze słuchu</small></span><i>→</i></button>
+                    <button class="mode-card mode-card--survival" onclick="app.startSurvival()"><span class="mode-icon">炎</span><span><b>Survival</b><small>Sprawdź odporność</small></span><i>→</i></button>
+                    <button class="mode-card mode-card--multi" onclick="nav('multiplayer')"><span class="mode-icon">組</span><span><b>Multiplayer</b><small>Trening z klasą</small></span><i>→</i></button>
+                    <button class="mode-card mode-card--sheet" onclick="nav('worksheet')"><span class="mode-icon">紙</span><span><b>Arkusze</b><small>Praca własnym tempem</small></span><i>→</i></button>
                 </div>
 
                 <div class="glass-card" style="margin-top: 2rem;">

@@ -1,4 +1,34 @@
 @media (max-width: 768px) {
+    #login-gate {
+        display: block;
+        padding: 1rem;
+    }
+
+    .login-story {
+        min-height: 300px;
+        margin-bottom: 1rem;
+        padding: 1.25rem;
+        border-radius: 20px;
+    }
+
+    .login-story .brand-lockup--hero {
+        margin-bottom: 3rem;
+    }
+
+    .login-story h1 {
+        font-size: clamp(2.15rem, 11vw, 3.15rem);
+    }
+
+    .login-story-copy > p,
+    .method-pills,
+    .japanese-seal {
+        display: none;
+    }
+
+    #login-gate .login-card {
+        max-width: none;
+    }
+
     .app-container {
         grid-template-columns: 1fr;
         display: block;
@@ -17,7 +47,7 @@
         justify-content: space-evenly;
         padding: 0.5rem;
         gap: 0;
-        background: rgba(15, 23, 42, 0.95);
+        background: rgba(7, 20, 38, 0.97);
         backdrop-filter: blur(20px);
         z-index: 1000;
         transition: transform 0.3s ease-in-out;
@@ -60,6 +90,37 @@
         overflow-x: hidden;
     }
 
+    .dashboard-hero {
+        min-height: 265px;
+        padding: 1.4rem;
+    }
+
+    .dashboard-hero h1 {
+        font-size: clamp(2rem, 10vw, 3rem);
+    }
+
+    .hero-mark {
+        display: none;
+    }
+
+    .section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .mode-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .mode-card,
+    .mode-card:nth-child(4),
+    .mode-card:nth-child(5) {
+        grid-column: auto;
+        min-height: 92px;
+        width: 100%;
+        margin: 0;
+    }
+
     /* Adjust huge numbers */
     .number-display {
         font-size: 6rem;
@@ -97,5 +158,32 @@
     /* Input overrides */
     #game-answer {
         font-size: 1.5rem !important;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1080px) {
+    #login-gate {
+        grid-template-columns: 1fr 420px;
+        gap: 1.5rem;
+        padding: 1.5rem;
+    }
+
+    .login-story {
+        min-height: 560px;
+    }
+
+    .method-pills,
+    .japanese-seal {
+        display: none;
+    }
+
+    .mode-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .mode-card,
+    .mode-card:nth-child(4),
+    .mode-card:nth-child(5) {
+        grid-column: auto;
     }
 }

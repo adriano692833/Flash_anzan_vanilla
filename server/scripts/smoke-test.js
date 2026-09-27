@@ -46,11 +46,11 @@ async function verify() {
         clearTimeout(timeout);
         const healthData = JSON.parse(health.body);
         const manifestData = JSON.parse(manifest.body);
-        const ok = home.status === 200 && home.body.includes('Anzan School Pro')
+        const ok = home.status === 200 && home.body.includes('Flash Anzan')
             && home.body.includes('Administrator szkoły')
             && home.body.includes('Panel właściciela szkoły')
             && health.status === 200 && healthData.status === 'ok'
-            && manifest.status === 200 && manifestData.short_name === 'Anzan Pro';
+            && manifest.status === 200 && manifestData.short_name === 'Flash Anzan';
         finish(ok ? 0 : 1, ok ? 'Smoke test HTTP/PWA: OK' : 'Smoke test HTTP/PWA: niepełna odpowiedź aplikacji.');
     } catch (error) {
         if (!done) setTimeout(verify, 500);

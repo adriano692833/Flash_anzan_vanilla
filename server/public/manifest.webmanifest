@@ -1,13 +1,13 @@
 {
-  "name": "Anzan Pro — Matematyka Mentalna",
-  "short_name": "Anzan Pro",
-  "description": "Trening sorobanu i matematyki mentalnej dla szkół.",
+  "name": "Flash Anzan — Soroban dla szkół",
+  "short_name": "Flash Anzan",
+  "description": "Nowoczesny trening sorobanu i matematyki mentalnej dla szkół.",
   "lang": "pl",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#07111f",
-  "theme_color": "#7c3aed",
+  "background_color": "#071426",
+  "theme_color": "#0b1f3a",
   "icons": [
     {
       "src": "/icons/anzan-pro.svg",

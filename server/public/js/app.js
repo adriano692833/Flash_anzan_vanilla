@@ -80,7 +80,7 @@ const KYU_VERSION = 4;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '6.2 School Pro';
+const APP_VERSION = '6.3 Flash Anzan';
 const APP_UPDATED = '2026-09-27';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -436,8 +436,8 @@ const app = {
                 datasets: [{
                     label: 'Total XP',
                     data: data,
-                    borderColor: '#8b5cf6',
-                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    borderColor: '#e75a42',
+                    backgroundColor: 'rgba(231, 90, 66, 0.1)',
                     fill: true,
                     tension: 0.4
                 }]
@@ -1031,8 +1031,8 @@ const app = {
                 datasets: [{
                     label: 'XP dziennie',
                     data: data,
-                    backgroundColor: 'rgba(139, 92, 246, 0.55)',
-                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(231, 90, 66, 0.55)',
+                    borderColor: '#e75a42',
                     borderWidth: 1
                 }]
             },
