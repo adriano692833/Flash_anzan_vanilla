@@ -1,66 +1,63 @@
-# Jak umieścić grę Anzan w Internecie?
+# Jak wdrożyć Anzan możliwie tanio
 
-Twoja aplikacja składa się z dwóch części:
-1.  **Frontend (Gra)**: To co widzi użytkownik (`index.html`, style, skrypty).
-2.  **Backend (Serwer)**: Obsługuje multiplayer (`server/server.js`).
+Frontend i backend działają w jednej usłudze Google App Engine Standard. Konfiguracja F1 z
+`min_instances: 0` usypia aplikację przy braku ruchu, a `max_instances: 1` jest wymagana, ponieważ
+aktywne pokoje multiplayer są przechowywane w pamięci.
 
-Aby wszystko działało dla każdego w internecie, musisz wdrożyć obie te części.
+## Pierwsze przygotowanie
 
----
+1. Włącz Firebase Authentication Email/Password w projekcie `anzan-web`.
+2. Utwórz bazę Firestore `anzan-db` i wdróż reguły z `firestore.rules`.
+3. Upewnij się, że konto usługi App Engine ma dostęp do Firestore i Firebase Authentication.
+4. W katalogu `server` wykonaj `npm ci`.
 
-## Opcja 1: Najprostsza (Vercel + Google Cloud) - Polecana
+## Wdrożenie
 
-Ta metoda jest darmowa (dla frontendu) i tania/darmowa (dla backendu w ramach limitów).
+```powershell
+cd server
+npm run sync
+npm test
+Copy-Item app.deploy.yaml.example app.deploy.yaml
+```
 
-### Krok 1: Wdrożenie Serwera (Google Cloud)
-W folderze `server/` masz już gotowe pliki konfiguracyjne dla Google Cloud App Engine.
+W `app.deploy.yaml` zastąp przykładowy `TEACHER_ACCESS_CODE` długim, losowym kodem. Plik jest
+ignorowany przez Git i nie wolno go commitować.
 
-1.  Zainstaluj [Google Cloud SDK](https://cloud.google.com/sdk/docs/install).
-2.  Otwórz terminal w folderze `server`.
-3.  Zaloguj się: `gcloud auth login`.
-4.  Utwórz projekt: `gcloud projects create anzan-twoja-nazwa` (zmień nazwę na unikalną).
-5.  Ustaw projekt: `gcloud config set project anzan-twoja-nazwa`.
-6.  Wdróż: `gcloud app deploy`.
-7.  Po zakończeniu otrzymasz adres, np.: `https://anzan-twoja-nazwa.ew.r.appspot.com`.
-8.  **SKOPIUJ TEN ADRES**.
+```powershell
+gcloud auth login
+gcloud config set project TWOJ_PROJECT_ID
+gcloud app deploy app.deploy.yaml
+```
 
-### Krok 2: Konfiguracja Gry
-1.  Otwórz plik `js/app.js` (w głównym folderze).
-2.  Znajdź linię z `SOCKET_URL` (ok. linii 56).
-3.  Wklej tam swój nowy adres serwera:
-    ```javascript
-    const SOCKET_URL = 'https://anzan-twoja-nazwa.ew.r.appspot.com';
-    ```
-4.  Zapisz plik.
+Po wdrożeniu aplikacja i Socket.IO są dostępne pod tym samym adresem App Engine. Nie trzeba
+utrzymywać osobnego projektu Vercel.
 
-### Krok 3: Wdrożenie Gry (Frontend) na Vercel
-1.  Wejdź na stronę [Vercel.com](https://vercel.com) i załóż darmowe konto.
-2.  Najłatwiej: Jeśli masz kod na GitHubie, połącz konto i zaimportuj projekt.
-3.  Metoda ręczna (z terminala):
-    *   Zainstaluj Node.js.
-    *   Wpisz w terminalu: `npm i -g vercel`.
-    *   Będąc w głównym folderze projektu (tam gdzie `index.html`), wpisz: `vercel`.
-    *   Klikaj `Enter` (potwierdź domyślne ustawienia).
-4.  Po chwili otrzymasz link do swojej gry (np. `https://anzan-game.vercel.app`).
-5.  **Wyślij ten link znajomym!**
+Pierwszy nauczyciel rejestruje się kodem `TEACHER_ACCESS_CODE`, zakłada organizację szkoły,
+a następnych nauczycieli zaprasza rotowanym kodem widocznym w panelu. Licencję można na początku
+obsługiwać bez integracji płatniczej: pole `schools/{schoolId}.status` przyjmuje `active` albo
+`suspended`. Zawieszenie nie kasuje danych.
 
----
+```powershell
+cd server
+npm run school:license -- SCHOOL_ID active school
+# albo po wygaśnięciu umowy:
+npm run school:license -- SCHOOL_ID suspended school
+```
 
-## Opcja 2: "Wszystko w jednym" (Tylko Google Cloud)
+Polecenie korzysta z bieżących poświadczeń Google Cloud i zapisuje również czas zmiany licencji.
 
-Jeśli wolisz jeden serwer do wszystkiego (łatwiejsze zarządzanie jednym linkiem, ale trudniejsza konfiguracja plików):
+Endpoint `/health` nie odczytuje Firestore i nadaje się do częstego monitoringu. `/ready` sprawdza
+również bazę i generuje odczyt, dlatego należy wywoływać go rzadziej.
 
-1.  W folderze `server/` stwórz folder `public`.
-2.  Skopiuj do niego pliki: `index.html`, folder `css`, folder `js`.
-3.  Zmodyfikuj `server/server.js` dodając po linii `app.use(cors());`:
-    ```javascript
-    app.use(express.static('public'));
-    ```
-4.  Wdróż folder `server` (`gcloud app deploy`).
-5.  Twoja gra będzie dostępna bezpośrednio pod adresem serwera.
+## Przed każdym kolejnym wdrożeniem
 
----
+```powershell
+cd server
+npm run sync
+npm test
+gcloud app deploy app.deploy.yaml
+```
 
-## Ważne uwagi
-*   **Koszty**: Google Cloud ma darmowy limit (Free Tier), ale miej na uwadze ewentualne koszty przy dużym ruchu. Vercel jest darmowy dla projektów hobbystycznych.
-*   **Multiplayer**: Aby działał, `SOCKET_URL` w pliku `js/app.js` musi prowadzić do działającego serwera.
+Szczegóły decyzji technicznych znajdują się w `ARCHITEKTURA.md`.
+Zakres produktu i checklista sprzedażowa są w `PRODUKT_SZKOLNY.md`, a kwestie danych w
+`OCHRONA_DANYCH.md`.

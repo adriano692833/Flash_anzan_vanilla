@@ -1,18 +1,24 @@
 {
   "name": "anzan-server",
-  "version": "1.0.0",
-  "description": "Multiplayer server for Anzan",
+  "version": "6.0.0",
+  "description": "Anzan School Pro — low-cost platform for mental arithmetic schools",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node soroban-generator.selftest.js"
+    "sync": "node scripts/sync-public.js",
+    "check:sync": "node scripts/sync-public.js --check",
+    "test": "node soroban-generator.selftest.js && node scripts/sync-public.js --check && node scripts/smoke-test.js",
+    "test:smoke": "node scripts/smoke-test.js",
+    "school:license": "node scripts/school-license.js"
   },
   "dependencies": {
-    "@google-cloud/firestore": "^7.1.0",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "firebase-admin": "^12.7.0",
-    "socket.io": "^4.7.2"
+    "@google-cloud/firestore": "^9.2.0",
+    "express": "^4.22.3",
+    "firebase-admin": "^14.5.0",
+    "socket.io": "^4.8.4"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   },
   "engines": {
     "node": "22.x"

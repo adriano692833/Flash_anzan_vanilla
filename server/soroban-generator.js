@@ -248,22 +248,27 @@
     }
 
     // --- Dyspozytor + deduplikacja ostatnich sekwencji ---
-    let _lastSeqs = [];
+    // Domyślnie historia globalna (tryb solo = jeden użytkownik). Serwer może
+    // przekazać własną tablicę historii per pokój (opts.history), żeby równoległe
+    // zajęcia różnych nauczycieli nie współdzieliły stanu deduplikacji.
+    const _lastSeqs = [];
 
-    function generateSequence(cfg) {
+    function generateSequence(cfg, opts) {
         const mode = cfg.m || 'add';
         if (mode === 'mul') return generateMul(cfg);
         if (mode === 'div') return generateDiv(cfg);
+
+        const history = (opts && Array.isArray(opts.history)) ? opts.history : _lastSeqs;
 
         let seq = generateAddSub(cfg);
         // unikaj powtórek i zbyt trywialnych (1-składnikowych) sekwencji
         for (let retry = 0; retry < 20; retry++) {
             const hash = seq.join(',');
-            if (seq.length >= 2 && _lastSeqs.indexOf(hash) === -1) break;
+            if (seq.length >= 2 && history.indexOf(hash) === -1) break;
             seq = generateAddSub(cfg);
         }
-        _lastSeqs.push(seq.join(','));
-        if (_lastSeqs.length > 30) _lastSeqs.shift();
+        history.push(seq.join(','));
+        if (history.length > 30) history.shift();
         return seq;
     }
 

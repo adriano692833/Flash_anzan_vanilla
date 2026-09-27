@@ -2,12 +2,8 @@ runtime: nodejs22
 env: standard
 instance_class: F1
 
-# Kod dostępu dla roli nauczyciela (wymagany przy rejestracji jako nauczyciel).
-# ZMIEŃ na własny. Uwaga: jeśli ustawiasz repo tymczasowo na Public przy deployu,
-# ta wartość jest widoczna — trzymaj repo Private albo podmień kod w Cloud Shell
-# przed 'gcloud app deploy'.
-env_variables:
-  TEACHER_ACCESS_CODE: "Soroban-Nauczyciel-2025"
+# Sekretu nauczyciela nie przechowujemy w repozytorium. Przed wdrożeniem skopiuj
+# ten plik do ignorowanego app.deploy.yaml i dodaj tam TEACHER_ACCESS_CODE.
 
 # max_instances MUST stay at 1: all room state is in-memory.
 # Increasing this without a shared state store (e.g. Redis) would

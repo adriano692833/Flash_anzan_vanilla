@@ -1,0 +1,13 @@
+runtime: nodejs22
+env: standard
+instance_class: F1
+
+# Skopiuj ten plik do app.deploy.yaml (ignorowany przez Git) i ustaw silny,
+# unikalny kod. Po ujawnieniu kod należy natychmiast zmienić.
+env_variables:
+  TEACHER_ACCESS_CODE: "WPISZ-TUTAJ-DLUGI-LOSOWY-KOD"
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 1
+  target_cpu_utilization: 0.65

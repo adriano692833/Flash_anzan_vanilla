@@ -80,8 +80,8 @@ const KYU_VERSION = 4;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '5.0 Pro';
-const APP_UPDATED = '2026-08-31';
+const APP_VERSION = '6.0 School Pro';
+const APP_UPDATED = '2026-09-27';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
 const FLASH_SPEEDS = [8.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.5, 1.0, 0.7, 0.5, 0.3];
@@ -148,21 +148,32 @@ const app = {
 
         const s = localStorage.getItem('anzan_v3_user');
         if (s) {
-            const d = JSON.parse(s);
-            this.user = d.user;
-            this.kyu = d.kyu || JSON.parse(JSON.stringify(DEFAULT_KYU));
-
-            // Migracja: sprawdź czy mamy nowy system (np. czy istnieje poziom 20)
-            // lub czy drabinka jest nieaktualna (KYU_VERSION). Reset configu poziomów,
-            // zachowujemy postępy user.xp itp.
-            if (!this.kyu['20'] || d.kyuVersion !== KYU_VERSION) {
-                console.log("Migrating Kyu ladder to version", KYU_VERSION);
-                this.kyu = JSON.parse(JSON.stringify(DEFAULT_KYU));
+            let d = null;
+            try { d = JSON.parse(s); } catch (e) {
+                console.warn('Uszkodzone dane lokalne, przywracam ustawienia domyślne.', e);
+                localStorage.removeItem('anzan_v3_user');
             }
+            if (d && d.user && typeof d.user === 'object') {
+                this.user = Object.assign({}, this.user, d.user);
+                this.user.settings = Object.assign({ sound: true, wsTime: 5 }, this.user.settings || {});
+                this.kyu = d.kyu || JSON.parse(JSON.stringify(DEFAULT_KYU));
 
-            // Migracja: dodaj historię i osiągnięcia jeśli brak
-            if (!this.user.history) this.user.history = {};
-            if (!this.user.achievements) this.user.achievements = [];
+                // Migracja: sprawdź czy mamy nowy system (np. czy istnieje poziom 20)
+                // lub czy drabinka jest nieaktualna (KYU_VERSION). Reset configu poziomów,
+                // zachowujemy postępy user.xp itp.
+                if (!this.kyu['20'] || d.kyuVersion !== KYU_VERSION) {
+                    console.log("Migrating Kyu ladder to version", KYU_VERSION);
+                    this.kyu = JSON.parse(JSON.stringify(DEFAULT_KYU));
+                }
+
+                // Migracja: dodaj historię i osiągnięcia jeśli brak
+                if (!this.user.history) this.user.history = {};
+                if (!this.user.achievements) this.user.achievements = [];
+            } else {
+                this.kyu = JSON.parse(JSON.stringify(DEFAULT_KYU));
+                this.user.history = {};
+                this.user.achievements = [];
+            }
         } else {
             this.kyu = JSON.parse(JSON.stringify(DEFAULT_KYU));
             this.user.history = {};
@@ -343,8 +354,9 @@ const app = {
 
             // Calc result based on mode (only if not already set)
             if (this.state.sum === undefined || this.state.sum === null) {
-                // Proste sumowanie (nowy generator zwraca już liczby ze znakiem)
-                this.state.sum = this.state.nums.reduce((a, b) => a + b, 0);
+                if (cfg.m === 'mul') this.state.sum = this.state.nums[0] * this.state.nums[1];
+                else if (cfg.m === 'div') this.state.sum = this.state.nums[0] / this.state.nums[1];
+                else this.state.sum = this.state.nums.reduce((a, b) => a + b, 0);
             }
 
             this.state.checked = false; // Reset flagi
@@ -533,15 +545,6 @@ const app = {
                 if (ok) audio.success(); else audio.error();
 
                 if (!isNaN(xp) && xp > 0) this.user.xp += xp;
-
-                // Tryb solo: zglos trafienie do rankingu treningowego. Stawke ustala
-                // serwer — tu leci wylacznie poziom i fakt trafienia.
-                if (ok && !isAsync && this.multi && typeof this.multi.reportSolo === 'function') {
-                    const kId = this.state.mode === 'survival'
-                        ? (this.state.survivalLevel || 20)
-                        : document.getElementById('game-kyu').value;
-                    this.multi.reportSolo(kId, true);
-                }
 
                 this.save();
                 if (typeof this.updateUI === 'function') this.updateUI();

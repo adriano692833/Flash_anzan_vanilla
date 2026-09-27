@@ -47,6 +47,22 @@ for (const kyu of Object.keys(KYU)) {
     }
 }
 
+// Operacje dodatkowe muszą zawsze dawać całkowity, dodatni wynik.
+for (let i = 0; i < N; i++) {
+    const mul = G.generateSequence({ m: 'mul', d: 2, mul: { a: { min: 10, max: 99 }, b: { min: 2, max: 9 } } });
+    if (mul.length !== 2 || !Number.isInteger(mul[0] * mul[1]) || mul[0] < 1 || mul[1] < 1) violations++;
+
+    const div = G.generateSequence({ m: 'div', d: 2, div: { divisor: { min: 2, max: 9 }, quotient: { min: 2, max: 99 } } });
+    if (div.length !== 2 || div[1] === 0 || !Number.isInteger(div[0] / div[1]) || div[0] < 1) violations++;
+}
+
+// Historia przekazana przez pokój ma być izolowana i ograniczona rozmiarem.
+const historyA = [];
+const historyB = [];
+for (let i = 0; i < 40; i++) G.generateSequence(KYU[10], { history: historyA });
+G.generateSequence(KYU[10], { history: historyB });
+if (historyA.length !== 30 || historyB.length !== 1) violations++;
+
 console.log(`Naruszenia techniki: ${violations}`);
 console.log(`Sumy ujemne:         ${negatives}`);
 console.log(`Puste sekwencje:     ${empties}`);

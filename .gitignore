@@ -11,6 +11,7 @@ npm-debug.log*
 *service-account*.json
 .env
 .env.*
+server/app.deploy.yaml
 
 # System / edytor
 .DS_Store

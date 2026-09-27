@@ -24,4 +24,12 @@
   } catch (e) {
     console.warn('Auth init pominięty:', e && e.message);
   }
+
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js').catch(error => {
+        console.warn('Service Worker:', error && error.message);
+      });
+    });
+  }
 })();

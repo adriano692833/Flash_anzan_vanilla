@@ -111,9 +111,14 @@
             s.on('registered', (d) => {
                 this.myRole = d.role;
                 this.myUid = d.uid;
+                this.schoolId = d.schoolId || '';
+                this.schoolRole = d.schoolRole || '';
                 this._connectErrors = 0;
                 // Odśwież listę klas nauczyciela / widok po zalogowaniu.
-                if (d.role === 'teacher') this.loadClasses();
+                if (d.role === 'teacher') {
+                    this.loadClasses();
+                    this.requestSchool();
+                }
                 this.updateAuthUI(d.role);
                 this.setStatus('online');
                 // Pasek boczny ma pokazywac dorobek konta od razu po zalogowaniu.
@@ -131,6 +136,7 @@
                 app.ui.modal('Klasa utworzona', `Klasa „${he(d.name)}" gotowa.<br>Kod dołączenia dla uczniów: <b style="font-size:1.3rem; color:var(--accent)">${he(d.joinCode)}</b>`);
                 this.loadClasses();
             });
+            s.on('school_data', (d) => this.renderSchool(d));
             s.on('classes_list', (d) => this.renderClasses(d.classes || []));
             s.on('class_joined', (d) => {
                 this.studentClassId = d.classId;
@@ -139,28 +145,12 @@
             });
             s.on('class_leaderboard', (d) => this.renderLeaderboard('class', d.board || []));
             s.on('global_leaderboard', (d) => this.renderLeaderboard('global', d.board || []));
-            s.on('solo_leaderboard', (d) => this.renderLeaderboard('solo', d.board || []));
-            s.on('profile_data', (d) => app.renderProfile(d));
-            s.on('solo_xp_awarded', (d) => {
-                // Punkty treningowe przyznaje serwer. Doliczamy je od razu lokalnie,
-                // zeby pasek XP reagowal natychmiast, bez odpytywania profilu po
-                // kazdym zadaniu.
-                const xp = (d && d.xp) || 0;
-                if (!xp) return;
-                if (app._accountStats) {
-                    app._accountStats.xp += xp;
-                    app.updateUI();
-                }
-                if (app._profile) {
-                    app._profile.soloXp = (app._profile.soloXp || 0) + xp;
-                    const today = new Date().toISOString().split('T')[0];
-                    app._profile.history = app._profile.history || {};
-                    app._profile.history[today] = (app._profile.history[today] || 0) + xp;
-                    const screen = document.getElementById('profile');
-                    if (screen && screen.style.display === 'block') app.renderProfile(app._profile);
-                }
+            s.on('profile_data', (d) => {
+                this.studentClassId = (d && d.classId) || '';
+                app.renderProfile(d);
             });
             s.on('class_members', (d) => this.renderClassMembers(d.classId, d.members || []));
+            s.on('class_report', (d) => this.renderClassReport(d.classId, d.sessions || []));
             s.on('member_password_reset', (d) => {
                 app.ui.modal('Hasło zresetowane', `Nowe tymczasowe hasło ucznia:<br><b style="font-size:1.4rem; color:var(--accent)">${he(d.tempPassword)}</b><br><span style="font-size:0.85rem">Przekaż je uczniowi — po zalogowaniu może grać dalej.</span>`);
             });
@@ -175,6 +165,15 @@
                     this._handleDisconnect(reason);
                 }
             });
+
+            s.on('room_closed', (d) => {
+                this._resetRoomState();
+                app.ui.toast('Pokój został zamknięty' + (d && d.reason ? ` (${d.reason})` : '') + '.', 'info');
+            });
+            s.on('server_shutdown', () => {
+                app.ui.toast('Serwer jest restartowany. Połączenie zostanie wznowione automatycznie.', 'warning');
+            });
+            s.on('score_save_failed', (d) => app.ui.toast((d && d.message) || 'Nie zapisano wyniku.', 'warning'));
 
             // --- LOBBY & JOINING ---
 
@@ -251,6 +250,7 @@
 
             s.on('lobby_update', (d) => {
                 this.roomLocked = !!d.locked;
+                this.roomState = d.state || 'lobby';
                 this.updateLobbyHeader(); // Odśwież kłódkę i przyciski
                 this.renderPlayers(d.players);
 
@@ -304,7 +304,7 @@
                 toast.style.boxShadow = '0 8px 32px rgba(0,0,0,0.5)';
                 toast.innerHTML = `
                     <div style="font-weight:bold; margin-bottom:0.5rem; color:var(--accent)">🚪 Ktoś puka!</div>
-                    <div style="margin-bottom:0.5rem">${d.name} chce dołączyć.</div>
+                    <div style="margin-bottom:0.5rem">${he(d.name)} chce dołączyć.</div>
                     <div style="display:flex; gap:0.5rem">
                         <button id="btn-acc-${d.pendingId}" class="btn btn-primary" style="padding:0.3rem 0.6rem; font-size:0.8rem">Wpuść</button>
                         <button id="btn-rej-${d.pendingId}" class="btn btn-danger" style="padding:0.3rem 0.6rem; font-size:0.8rem">Odrzuć</button>
@@ -369,10 +369,13 @@
                     document.getElementById('game-kyu').add(opt);
                 }
                 document.getElementById('game-kyu').value = tId;
+                this.currentTaskIndex = Number.isInteger(d.index) ? d.index : null;
 
                 // Nadpisz sekwencję liczb danymi z serwera
                 app.state.nums = d.data.numbers;
-                app.state.sum = d.data.numbers.reduce((a, b) => a + b, 0); // Proste sumowanie do walidacji lokalnej (fallback)
+                if (d.data.operation === 'mul') app.state.sum = d.data.numbers[0] * d.data.numbers[1];
+                else if (d.data.operation === 'div') app.state.sum = d.data.numbers[0] / d.data.numbers[1];
+                else app.state.sum = d.data.numbers.reduce((a, b) => a + b, 0);
                 app.state.mode = 'flash';
 
                 app.startGame();
@@ -380,6 +383,15 @@
             });
 
             s.on('validation_result', (d) => this._handleValidationResult(d));
+            s.on('answer_rejected', () => {
+                if (this._pendingValidation) {
+                    const pending = this._pendingValidation;
+                    this._pendingValidation = null;
+                    if (this._pendingValidationTimeout) clearTimeout(this._pendingValidationTimeout);
+                    this._pendingValidationTimeout = null;
+                    pending.reject(new Error('Runda już się zmieniła.'));
+                }
+            });
 
             s.on('round_ended', (d) => {
                 if (d.reason === 'TIMEOUT') {
@@ -413,6 +425,45 @@
             this.socket.emit('create_room', { config: app.kyu[k], mode, classId });
         },
 
+        createSchool: function () {
+            const name = ((document.getElementById('school-name') || {}).value || '').trim();
+            if (!name) return app.ui.toast('Podaj nazwę szkoły.', 'warning');
+            this.init();
+            this.socket.emit('create_school', { name });
+        },
+        requestSchool: function () {
+            this.init();
+            this.socket.emit('request_school');
+        },
+        rotateSchoolTeacherCode: function () {
+            if (!confirm('Wygenerować nowy kod dla nauczycieli? Poprzedni przestanie działać.')) return;
+            this.socket.emit('rotate_school_teacher_code');
+        },
+        renderSchool: function (school) {
+            const onboarding = document.getElementById('school-onboarding');
+            const info = document.getElementById('school-info');
+            if (!onboarding || !info) return;
+            if (!school) {
+                onboarding.style.display = 'block';
+                info.style.display = 'none';
+                return;
+            }
+            this.schoolId = school.id;
+            this.schoolRole = school.schoolRole || this.schoolRole || 'teacher';
+            onboarding.style.display = 'none';
+            info.style.display = 'block';
+            const isOwner = this.schoolRole === 'owner';
+            info.innerHTML = `
+                <div class="report-header">
+                    <div><h2 style="margin:0;">🏫 ${he(school.name || 'Szkoła')}</h2>
+                    <div class="stat-label">Plan: ${he(school.plan || 'trial')} · ${isOwner ? 'Właściciel' : 'Nauczyciel'}</div></div>
+                    <span class="school-status ${school.status === 'active' ? '' : 'is-inactive'}">${school.status === 'active' ? 'Aktywna' : 'Nieaktywna'}</span>
+                </div>
+                ${isOwner ? `<div class="school-invite"><div><span class="stat-label">Kod zaproszenia dla nauczycieli</span><strong>${he(school.teacherJoinCode || '—')}</strong></div>
+                <button class="btn btn-secondary" onclick="app.multi.rotateSchoolTeacherCode()">Zmień kod</button></div>` : ''}`;
+            this.loadClasses();
+        },
+
         // --- ZARZĄDZANIE KLASAMI (nauczyciel) ---
         createClass: function () {
             const name = (document.getElementById('class-name') || {}).value || '';
@@ -429,8 +480,9 @@
             // Wypełnij selecty klas (formularz pokoju + panel klas).
             const sel = document.getElementById('host-class');
             if (sel) {
-                sel.innerHTML = this.myClasses.length
-                    ? this.myClasses.map(c => `<option value="${he(c.id)}">${he(c.name)} (${he(c.schoolYear || '')})</option>`).join('')
+                const activeClasses = this.myClasses.filter(c => c.active !== false);
+                sel.innerHTML = activeClasses.length
+                    ? activeClasses.map(c => `<option value="${he(c.id)}">${he(c.name)} (${he(c.schoolYear || '')})</option>`).join('')
                     : '<option value="">— brak klas, utwórz klasę —</option>';
             }
             const list = document.getElementById('teacher-classes-list');
@@ -444,10 +496,12 @@
                                 <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
                                     <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassLeaderboard('${he(c.id)}')">🏆 Ranking</button>
                                     <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.listClassMembers('${he(c.id)}')">👥 Uczniowie</button>
+                                    <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassReport('${he(c.id)}')">📊 Raport</button>
                                     <button class="btn btn-danger" style="font-size:0.75rem" onclick="app.multi.closeClass('${he(c.id)}')">Zamknij</button>
                                 </div>
                             </div>
                             <div id="members-${he(c.id)}" style="margin-top:0.5rem;"></div>
+                            <div id="report-${he(c.id)}" style="margin-top:0.5rem;"></div>
                         </div>`).join('')
                     : '<div style="color:var(--text-muted)">Brak klas. Utwórz pierwszą klasę powyżej.</div>';
             }
@@ -469,6 +523,81 @@
                         </span>
                     </div>`).join('')
                 : '<div style="color:var(--text-muted); font-size:0.85rem; padding:0.3rem;">Brak uczniów w klasie.</div>';
+        },
+        requestClassReport: function (classId) {
+            this.init();
+            this.socket.emit('request_class_report', { classId });
+        },
+        _aggregateReport: function (sessions) {
+            const students = new Map();
+            let attempts = 0;
+            let correct = 0;
+            for (const session of sessions || []) {
+                for (const row of session.students || []) {
+                    const key = row.uid || row.name;
+                    const stat = students.get(key) || { name: row.name || 'Uczeń', sessions: 0, attempts: 0, correct: 0, xp: 0, totalTime: 0 };
+                    stat.sessions += 1;
+                    stat.attempts += Number(row.attempts) || 0;
+                    stat.correct += Number(row.correct) || 0;
+                    stat.xp += Number(row.xp) || 0;
+                    stat.totalTime += Number(row.totalTime) || 0;
+                    attempts += Number(row.attempts) || 0;
+                    correct += Number(row.correct) || 0;
+                    students.set(key, stat);
+                }
+            }
+            return { students: Array.from(students.values()).sort((a, b) => b.correct - a.correct), attempts, correct };
+        },
+        renderClassReport: function (classId, sessions) {
+            const box = document.getElementById('report-' + classId);
+            if (!box) return;
+            this._reports = this._reports || {};
+            this._reports[classId] = sessions;
+            if (!sessions.length) {
+                box.innerHTML = '<div class="report-panel">Brak zakończonych zajęć. Raport pojawi się po zamknięciu pierwszego pokoju.</div>';
+                return;
+            }
+            const summary = this._aggregateReport(sessions);
+            const accuracy = summary.attempts ? Math.round(summary.correct / summary.attempts * 100) : 0;
+            const studentRows = summary.students.map(row => {
+                const rowAccuracy = row.attempts ? Math.round(row.correct / row.attempts * 100) : 0;
+                const avg = row.attempts ? (row.totalTime / row.attempts / 1000).toFixed(1) : '—';
+                return `<tr><td>${he(row.name)}</td><td>${row.sessions}</td><td>${row.correct}/${row.attempts}</td><td>${rowAccuracy}%</td><td>${avg}s</td><td>${row.xp}</td></tr>`;
+            }).join('');
+            const recentRows = sessions.slice(0, 10).map(session => {
+                const date = new Date(Number(session.startedAt) || Date.now()).toLocaleString('pl-PL');
+                return `<tr><td>${he(date)}</td><td>${session.kyuId ? he(session.kyuId + ' Kyu') : '—'}</td><td>${Number(session.taskCount) || 0}</td><td>${Number(session.studentCount) || 0}</td></tr>`;
+            }).join('');
+            box.innerHTML = `
+                <div class="report-panel">
+                    <div class="report-header"><div><b>Raport klasy</b><div class="stat-label">Ostatnie ${sessions.length} zajęć</div></div>
+                    <button class="btn btn-secondary" onclick="app.multi.exportClassReport('${he(classId)}')">Eksport CSV</button></div>
+                    <div class="report-kpis"><div><b>${sessions.length}</b><span>Zajęcia</span></div><div><b>${summary.students.length}</b><span>Aktywni uczniowie</span></div><div><b>${summary.correct}</b><span>Poprawne</span></div><div><b>${accuracy}%</b><span>Skuteczność</span></div></div>
+                    <h4>Postęp uczniów</h4><div class="report-table-wrap"><table class="report-table"><thead><tr><th>Uczeń</th><th>Zajęcia</th><th>Wynik</th><th>Skuteczność</th><th>Śr. czas</th><th>XP</th></tr></thead><tbody>${studentRows}</tbody></table></div>
+                    <h4>Ostatnie zajęcia</h4><div class="report-table-wrap"><table class="report-table"><thead><tr><th>Data</th><th>Poziom</th><th>Zadania</th><th>Uczniowie</th></tr></thead><tbody>${recentRows}</tbody></table></div>
+                </div>`;
+        },
+        exportClassReport: function (classId) {
+            const sessions = (this._reports && this._reports[classId]) || [];
+            const summary = this._aggregateReport(sessions);
+            const quote = value => `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
+            const rows = [['Uczeń', 'Liczba zajęć', 'Próby', 'Poprawne', 'Skuteczność %', 'Średni czas s', 'XP']];
+            summary.students.forEach(row => rows.push([
+                row.name,
+                row.sessions,
+                row.attempts,
+                row.correct,
+                row.attempts ? Math.round(row.correct / row.attempts * 100) : 0,
+                row.attempts ? (row.totalTime / row.attempts / 1000).toFixed(1) : '',
+                row.xp
+            ]));
+            const blob = new Blob(['\uFEFF' + rows.map(row => row.map(quote).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `anzan-raport-${classId}-${new Date().toISOString().slice(0, 10)}.csv`;
+            link.click();
+            URL.revokeObjectURL(url);
         },
         removeMember: function (classId, uid) {
             if (!confirm('Usunąć tego ucznia z klasy?')) return;
@@ -503,36 +632,21 @@
             this.init();
             this.socket.emit('request_global_leaderboard');
         },
-        requestSoloLeaderboard: function () {
-            this.init();
-            this.socket.emit('request_solo_leaderboard');
-        },
         requestProfile: function () {
             this.init();
             this.socket.emit('request_profile');
-        },
-        // Zgloszenie poprawnej odpowiedzi w trybie solo. Wysylamy tylko poziom i fakt
-        // trafienia — stawke punktowa wylicza serwer (klient moze edytowac poziomy).
-        reportSolo: function (kyuId, correct) {
-            if (!correct) return;
-            if (!this.socket || !this.socket.connected) return;
-            const k = Number.parseInt(kyuId, 10);
-            if (!Number.isFinite(k) || k < 1 || k > 20) return;
-            this.socket.emit('solo_result', { kyuId: k, correct: true });
         },
         renderLeaderboard: function (scope, board) {
             const el = document.getElementById('leaderboard-body');
             const title = document.getElementById('leaderboard-title');
             const titles = {
                 class: '🏆 Ranking klasy',
-                global: '🌍 Zajęcia — ranking globalny',
-                solo: '🏋️ Trening solo — ranking globalny'
+                global: '🌍 Zajęcia — ranking globalny'
             };
             if (title) title.innerText = titles[scope] || titles.global;
             if (!el) return;
             const pts = (p) => {
                 if (scope === 'class') return p.points || 0;
-                if (scope === 'solo') return p.soloXp || 0;
                 return p.totalXp || 0;
             };
             const rows = (board || []).slice(0, 50);
@@ -585,6 +699,12 @@
             }
         },
 
+        endSession: function () {
+            if (!this.socket || !this.isHost || !this.roomCode) return;
+            if (!confirm('Zakończyć zajęcia i zapisać raport klasy?')) return;
+            this.socket.emit('close_room', { code: this.roomCode });
+        },
+
         forceEndRound: function () {
             if (this.isHost && this.socket) {
                 this.socket.emit('force_end_round', { code: this.roomCode });
@@ -613,7 +733,7 @@
 
             // Tożsamość (nazwa/uid) pochodzi z zalogowanego konta — zarejestrowana przez authenticate().
             this.init();
-            this.socket.emit('join_room', { code: c });
+            this.socket.emit('request_join', { code: c });
         },
 
         // Sprzatanie stanu pokoju — WSPOLNE dla swiadomego wyjscia i dla zerwania laczy.
@@ -631,6 +751,8 @@
             this.role = '';
             this.isHost = false;
             this.roomLocked = false;
+            this.roomState = 'lobby';
+            this.currentTaskIndex = null;
 
             // Przywróć lokalny adapter
             app.adapter = app.adapters.local;
@@ -667,6 +789,7 @@
             const codeEl = document.getElementById('lobby-room-code');
             const lockBtn = document.getElementById('lobby-lock-btn');
             const startBtn = document.getElementById('lobby-start-btn');
+            const endBtn = document.getElementById('lobby-end-btn');
 
             if (codeEl) {
                 const lockIcon = this.roomLocked ? '🔒' : '';
@@ -681,7 +804,10 @@
             }
 
             if (startBtn) {
-                startBtn.style.display = this.isHost ? 'block' : 'none';
+                startBtn.style.display = this.isHost && this.roomState !== 'playing' ? 'block' : 'none';
+            }
+            if (endBtn) {
+                endBtn.style.display = this.isHost ? 'block' : 'none';
             }
         },
 
@@ -755,7 +881,7 @@
         updateMiniBoard: function (players) {
             this.lastMiniBoard.innerHTML = players.slice(0, 5).map((p, i) => `
                 <div style="display:flex; justify-content:space-between; margin-bottom: 2px; font-size: 0.8rem;">
-                    <span>#${i + 1} ${p.name}</span>
+                    <span>#${i + 1} ${he(p.name)}</span>
                     <span>${p.xp}xp (${((p.totalTime || 0) / 1000).toFixed(1)}s)</span>
                 </div>
             `).join('');
@@ -819,7 +945,12 @@
             return new Promise((resolve, reject) => {
                 m._pendingValidation = { resolve, reject };
                 try {
-                    m.socket.emit('submit_answer', { code: m.roomCode, answer: ctx.answer, time: ctx.time });
+                    m.socket.emit('submit_answer', {
+                        code: m.roomCode,
+                        taskIndex: m.currentTaskIndex,
+                        answer: ctx.answer,
+                        time: ctx.time
+                    });
                 } catch (e) {
                     m._pendingValidation = null;
                     reject(e);

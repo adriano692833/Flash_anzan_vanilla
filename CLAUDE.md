@@ -8,8 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cd server
 npm install
+npm run sync   # copies the canonical root frontend into server/public
 npm start        # runs on localhost:8080 (or $PORT)
-npm test         # runs the soroban generator self-test (technique/negative-sum checks)
+npm test         # generator self-test plus source-copy consistency check
 ```
 
 **Frontend:**
@@ -32,20 +33,17 @@ cd server && gcloud app deploy
 firebase deploy --only firestore:rules   # or paste rules in Firebase Console → Firestore → Rules
 ```
 
-**Deploy frontend to Vercel:**
-Push to GitHub and Vercel auto-deploys, or run `vercel` CLI in the project root.
-
-> NOTE: In practice the app is served from App Engine out of `server/public/`, which is a **manual
-> mirror** of the root frontend files. After editing any root frontend file, copy it into
-> `server/public/`. The shared generator `js/soroban-generator.js` must ALSO be copied to
-> `server/soroban-generator.js` (the server `require`s it).
+The root frontend is canonical. Before testing or deploying, run `cd server && npm run sync`;
+the command updates `server/public/` and the backend copy of the shared generator.
 
 ## Prerequisites (one-time, outside code)
 
 - **Firebase Authentication** must be enabled in the Firebase project that owns Firestore `anzan-db`:
   Console → Authentication → **Email/Password**. Create a Web app and paste `apiKey`/`authDomain`/
   `projectId` into `js/firebase-config.js` (apiKey is public/safe in the frontend).
-- **Teacher access code**: set env var `TEACHER_ACCESS_CODE` on App Engine (default `ANZAN-TEACHER`).
+- **Teacher access code**: copy `server/app.deploy.yaml.example` to the ignored
+  `server/app.deploy.yaml`, set a strong `TEACHER_ACCESS_CODE`, and deploy that file. There is no
+  code default; without the variable, creating new teacher accounts is disabled.
   Registering with the teacher role requires this code (server-gated).
 
 ## Architecture
@@ -67,18 +65,20 @@ Push to GitHub and Vercel auto-deploys, or run `vercel` CLI in the project root.
 | File | Role |
 |------|------|
 | `server.js` | Express + Socket.IO, auth verification, room/class management, task generation, scoring |
-| `firestore.js` | Firestore helpers: users, classes + members, rooms, leaderboards |
+| `firestore.js` | Firestore helpers: users, schools, classes, members, sessions, leaderboards |
 | `soroban-generator.js` | Copy of the shared generator (`require`d by `server.js`) |
 | `soroban-generator.selftest.js` | `npm test` — asserts every generated step respects the level's technique |
-| `app.yaml` | App Engine config (**runtime nodejs22, F2, max_instances=1**) |
+| `app.yaml` | App Engine config (**runtime nodejs22, F1, min_instances=0, max_instances=1**) |
 | `firestore.rules` | (repo root) Denies all direct client DB access — everything goes through the server |
 
 ### Database — Google Firestore (`anzan-db`)
 - `users/{uid}` — `name`, `avatar`, `role` ('teacher'|'student'), `totalXp` (global all-time), `createdAt`.
   **`uid` is the Firebase Auth uid** (persistent), not the socket id.
-- `classes/{classId}` — `name`, `teacherUid`, `teacherName`, `schoolYear`, `joinCode`, `active`, `createdAt`.
+- `schools/{schoolId}` — tenant, owner, plan/status and rotatable teacher join code.
+- `classes/{classId}` — `schoolId`, `name`, `teacherUid`, `teacherName`, `schoolYear`, `joinCode`, `active`, `createdAt`.
 - `classes/{classId}/members/{uid}` — `name`, `points` (this class/year), `joinedAt`, `lastActive`.
-- `rooms/{code}` — ephemeral room snapshot; deleted on room close.
+- `classes/{classId}/sessions/{sessionId}` — one aggregated lesson report, written when the room closes.
+- Active rooms are intentionally in memory only; a server restart ends the current lesson.
 
 ### Authentication & identity
 - Frontend uses **Firebase Auth (Email/Password)**. Students self-register "by username" — the
@@ -93,12 +93,14 @@ Push to GitHub and Vercel auto-deploys, or run `vercel` CLI in the project root.
 
 ### Multiplayer data flow
 1. User logs in (Firebase) → client connects Socket.IO → `register {idToken,...}` → server verifies, sets `socket.uid`/role.
-2. Teacher creates a **class** (join code) once; students join the class by code (or are auto-enrolled on room approval).
-3. Teacher creates a **room linked to a class** → students `request_join` → teacher approves (approval gate).
-4. Host starts game → server generates task from Kyu config (incl. display speed `t`) → broadcasts to the room.
-5. Player submits → server validates → points scaled by difficulty (`pointsForConfig`) → written to
+2. First teacher creates a **school**; its owner can invite other teachers with a rotatable code.
+3. Teacher creates a **class** (join code) once; students join the class by code.
+4. Teacher creates a **room linked to a class** → students `request_join` → teacher approves (approval gate).
+5. Host starts game → server generates task from Kyu config (incl. display speed `t`) → broadcasts to the room.
+6. Player submits → server validates → points scaled by difficulty (`pointsForConfig`) → written to
    BOTH `classes/{id}/members/{uid}.points` (class/year ranking) and `users/{uid}.totalXp` (global). Solo modes do NOT affect rankings.
-6. Rankings delivered over Socket.IO (`request_class_leaderboard` / `request_global_leaderboard`); client never reads Firestore directly.
+7. Closing the room writes one aggregated session report. Rankings and reports are delivered over Socket.IO;
+   the client never reads Firestore directly.
 
 ## Key Design Details
 
@@ -119,5 +121,5 @@ Push to GitHub and Vercel auto-deploys, or run `vercel` CLI in the project root.
   All room state is in-memory → `app.yaml` must stay `max_instances: 1` (no shared store yet).
 - **Game modes**: Flash (visual), Voice (Web Speech API — falls back with a warning if no `pl` voice),
   Worksheet (jsPDF export), Multiplayer (Socket.IO), Survival (rapid-fire to first mistake).
-- **No .env / secrets in repo** — App Engine service account covers Firestore and `firebase-admin`.
-  `TEACHER_ACCESS_CODE` is the only env knob.
+- **No secrets in repo** — App Engine service account covers Firestore and `firebase-admin`.
+  `TEACHER_ACCESS_CODE` belongs only in ignored `app.deploy.yaml` or the deployment environment.

@@ -85,11 +85,11 @@
 
         login: async function (username, password, role, teacherCode) {
             const email = this._emailFor(username);
+            this._pendingRole = role;
+            this._pendingTeacherCode = teacherCode;
+            this._rememberRole(role);
             try {
                 await firebase.auth().signInWithEmailAndPassword(email, password);
-                this._pendingRole = role;
-                this._pendingTeacherCode = teacherCode;
-                this._rememberRole(role);
             } catch (e) {
                 app.ui && app.ui.toast && app.ui.toast('Logowanie: ' + this._friendly(e), 'error');
                 throw e;

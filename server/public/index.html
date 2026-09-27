@@ -4,7 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flash Anzan Pro - Trening Mentalny</title>
+    <meta name="theme-color" content="#7c3aed">
+    <meta name="description" content="Anzan Pro — platforma treningu sorobanu i matematyki mentalnej dla szkół.">
+    <title>Anzan School Pro — matematyka mentalna dla szkół</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/anzan-pro.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -23,8 +27,8 @@
     <div id="login-gate">
         <div class="login-card glass-card">
             <div style="text-align:center; margin-bottom:1.5rem;">
-                <div style="font-size:2rem; font-weight:700; color:var(--primary);">⚡ Flash Anzan</div>
-                <div style="color:var(--text-muted); font-size:0.9rem; margin-top:0.35rem;">Trening mentalny na sorobanie</div>
+                <div style="font-size:2rem; font-weight:700; color:var(--primary);">🧮 Anzan School Pro</div>
+                <div style="color:var(--text-muted); font-size:0.9rem; margin-top:0.35rem;">Soroban i matematyka mentalna dla szkół</div>
             </div>
             <label class="stat-label">Nazwa użytkownika</label>
             <input type="text" id="auth-username" class="input-lg" placeholder="np. ania2016"
@@ -38,8 +42,8 @@
                 <option value="teacher">👨‍🏫 Nauczyciel</option>
             </select>
             <div id="auth-teacher-code-row" style="display:none; margin-bottom: 1rem;">
-                <label class="stat-label">Kod nauczyciela</label>
-                <input type="password" id="auth-teacher-code" class="input-lg" placeholder="kod od administratora">
+                <label class="stat-label">Kod szkoły</label>
+                <input type="password" id="auth-teacher-code" class="input-lg" placeholder="kod zaproszenia lub kod uruchomieniowy">
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
                 <button class="btn btn-primary" onclick="authSubmit('login')">Zaloguj</button>
@@ -53,7 +57,7 @@
 
     <div class="app-container is-locked">
         <aside class="sidebar">
-            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">⚡ Flash Anzan</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">🧮 Anzan School</div>
 
             <div style="border-top: 1px solid var(--glass-border); padding-top: 1rem;">
                 <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
@@ -159,7 +163,7 @@
                     </div>
                     <div>
                         <div id="prof-solo-xp" style="font-size:1.8rem; font-weight:bold;">0</div>
-                        <div style="color:var(--text-muted); font-size:0.85rem;">Punkty z treningu</div>
+                        <div style="color:var(--text-muted); font-size:0.85rem;">Dawne punkty treningu</div>
                     </div>
                     <div>
                         <div id="prof-class-pts" style="font-size:1.8rem; font-weight:bold;">0</div>
@@ -450,6 +454,17 @@
                     <div id="mp-home">
                         <!-- PANEL NAUCZYCIELA -->
                         <div id="teacher-panel" style="display:none;">
+                            <div class="glass-card" id="school-card" style="max-width:700px; margin:0 auto 1rem auto; border-left:3px solid var(--secondary);">
+                                <div id="school-onboarding">
+                                    <h2 style="margin-bottom:0.5rem;">🏫 Twoja szkoła</h2>
+                                    <p style="color:var(--text-muted); margin-bottom:1rem;">Utwórz przestrzeń szkoły, aby współdzielić klasy z nauczycielami i budować historię zajęć.</p>
+                                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                        <input type="text" id="school-name" class="input-lg" placeholder="Nazwa szkoły" style="flex:1; min-width:220px;">
+                                        <button class="btn btn-primary" onclick="app.multi.createSchool()">Utwórz szkołę</button>
+                                    </div>
+                                </div>
+                                <div id="school-info" style="display:none;"></div>
+                            </div>
                             <div class="glass-card" style="max-width:700px; margin:0 auto 1rem auto; border-left:3px solid var(--accent);">
                                 <div style="font-size:0.9rem; color:var(--text-muted); line-height:1.6;">
                                     <b style="color:var(--text-main)">Jak poprowadzić zajęcia:</b><br>
@@ -528,7 +543,6 @@
                                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                                     <button class="btn btn-secondary" style="font-size:0.8rem" onclick="app.multi.requestClassLeaderboard()">Klasa</button>
                                     <button class="btn btn-secondary" style="font-size:0.8rem" onclick="app.multi.requestGlobalLeaderboard()">Zajęcia (globalnie)</button>
-                                    <button class="btn btn-secondary" style="font-size:0.8rem" onclick="app.multi.requestSoloLeaderboard()">🏋️ Trening solo</button>
                                 </div>
                             </div>
                             <div id="leaderboard-body"><div style="color:var(--text-muted)">Wybierz ranking do wyświetlenia.</div></div>
@@ -551,6 +565,8 @@
                                 style="display:none;">🔒 Zablokuj</button>
                             <button id="lobby-start-btn" class="btn btn-primary" onclick="app.multi.startGame()"
                                 style="display: none;">START GRY</button>
+                            <button id="lobby-end-btn" class="btn btn-danger" onclick="app.multi.endSession()"
+                                style="display: none;">ZAKOŃCZ ZAJĘCIA</button>
                         </div>
                     </div>
 

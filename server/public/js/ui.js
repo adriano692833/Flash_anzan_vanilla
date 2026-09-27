@@ -18,7 +18,12 @@
     if (type === 'success') icon = '✅';
     if (type === 'error') icon = '⚠️';
 
-    el.innerHTML = `<span style="font-size:1.2rem">${icon}</span> <span>${msg}</span>`;
+    const iconEl = document.createElement('span');
+    iconEl.style.fontSize = '1.2rem';
+    iconEl.textContent = icon;
+    const messageEl = document.createElement('span');
+    messageEl.textContent = String(msg == null ? '' : msg);
+    el.append(iconEl, document.createTextNode(' '), messageEl);
     toastContainer.appendChild(el);
 
     // Auto remove
