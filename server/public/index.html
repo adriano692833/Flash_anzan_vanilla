@@ -49,11 +49,12 @@
             <div class="login-heading">
                 <span id="auth-heading-kicker" class="login-heading-kicker">WITAJ PONOWNIE</span>
                 <h2 id="auth-heading-title">Wejdź do swojej szkoły</h2>
-                <p id="auth-heading-subtitle">Podaj nazwę użytkownika i hasło.</p>
+                <p id="auth-heading-subtitle">Pracownik loguje się e-mailem, uczeń nazwą użytkownika.</p>
             </div>
             <label class="stat-label">Nazwa użytkownika lub e-mail</label>
-            <input type="text" id="auth-username" class="input-lg" placeholder="np. ania2016"
+            <input type="text" id="auth-username" class="input-lg" placeholder="e-mail lub nazwa ucznia"
                 style="margin-bottom: 1rem;" autocomplete="username">
+            <p class="auth-login-help">Właściciel, nauczyciel lub opiekun loguje się <b>e-mailem</b>. Uczeń bez e-maila — nazwą użytkownika.</p>
             <label class="stat-label">Hasło</label>
             <input type="password" id="auth-password" class="input-lg" placeholder="min. 6 znaków"
                 style="margin-bottom: 1rem;" autocomplete="current-password">
@@ -125,6 +126,10 @@
         </aside>
 
         <main class="main-content">
+            <div id="email-verification-banner" class="email-verification-banner" style="display:none;" role="status">
+                <div><b>Potwierdź swój adres e-mail</b><span>Sprawdź także Spam. Po potwierdzeniu wyloguj się i zaloguj ponownie.</span></div>
+                <button class="btn btn-secondary" onclick="app.auth.sendVerificationEmail()">Wyślij wiadomość ponownie</button>
+            </div>
             <div id="dashboard" class="screen active">
                 <section class="dashboard-hero">
                     <div>
@@ -607,8 +612,9 @@
                                 <div id="school-info" style="display:none;"></div>
                             </div>
                             <div class="glass-card" style="max-width:700px; margin:0 auto 1rem auto; border-left:3px solid var(--accent);">
-                                <b>Zakres administratora</b>
-                                <p style="color:var(--text-muted); margin:0.5rem 0 0;">Tworzenie szkoły, aktywacja licencji i zapraszanie nauczycieli. Klasy oraz zajęcia prowadzą konta nauczycieli.</p>
+                                <b>Zakres właściciela szkoły</b>
+                                <p style="color:var(--text-muted); margin:0.5rem 0 0;">Zarządzasz nauczycielami, klasami, uczniami, planem, limitami licencji i wnioskami. Widzisz rankingi, frekwencję, zadania, historię zajęć oraz audyt. Pokoje treningowe prowadzi przypisany nauczyciel.</p>
+                                <button class="btn btn-secondary" style="margin-top:0.8rem" onclick="nav('school-operations')">Otwórz centrum zarządzania</button>
                             </div>
                             <div id="admin-dashboard" class="glass-card" style="max-width:900px; margin:0 auto 1.5rem auto; display:none;">
                                 <div class="report-header">
@@ -688,7 +694,7 @@
                                 <h2 id="leaderboard-title" style="margin:0;">🏆 Ranking</h2>
                                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                                     <button class="btn btn-secondary" style="font-size:0.8rem" onclick="app.multi.requestClassLeaderboard()">Klasa</button>
-                                    <button class="btn btn-secondary" style="font-size:0.8rem" onclick="app.multi.requestGlobalLeaderboard()">Zajęcia (globalnie)</button>
+                                    <button class="btn btn-secondary" style="font-size:0.8rem" onclick="app.multi.requestGlobalLeaderboard()">Cała szkoła</button>
                                 </div>
                             </div>
                             <div id="leaderboard-body"><div style="color:var(--text-muted)">Wybierz ranking do wyświetlenia.</div></div>

@@ -128,6 +128,7 @@
                     this.requestSchool();
                 } else if (d.role === 'school_admin') {
                     this.requestSchool();
+                    if (typeof window.nav === 'function') window.nav('multiplayer');
                 } else if (d.role === 'guardian') {
                     this.requestSchool();
                 }
@@ -722,7 +723,7 @@
             const title = document.getElementById('leaderboard-title');
             const titles = {
                 class: '🏆 Ranking klasy',
-                global: '🌍 Zajęcia — ranking globalny'
+                global: '🏫 Ranking całej szkoły'
             };
             if (title) title.innerText = titles[scope] || titles.global;
             if (!el) return;
@@ -749,7 +750,7 @@
             if (s) s.style.display = role === 'student' ? 'block' : 'none';
             if (ranking) ranking.style.display = ['school_admin', 'guardian'].includes(role) ? 'none' : 'block';
 
-            const label = role === 'school_admin' ? '🛡️ Administrator szkoły'
+            const label = role === 'school_admin' ? '🛡️ Właściciel szkoły'
                 : role === 'teacher' ? '👨‍🏫 Nauczyciel'
                     : role === 'guardian' ? '👪 Opiekun' : '🎓 Uczeń';
             ['auth-role-badge', 'side-role-badge'].forEach((id) => {

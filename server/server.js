@@ -24,7 +24,6 @@ const {
     createSchool,
     getSchool,
     getSchoolDashboard,
-    getGlobalLeaderboard,
     findClassForMember,
     isClassMember,
     createInvitations,
@@ -1226,9 +1225,11 @@ io.on('connection', (socket) => {
         try {
             const id = String(classId || '');
             const cls = await getClass(id);
-            const sameSchoolStaff = cls && ['teacher', 'school_admin'].includes(socket.data.accountRole)
+            const schoolAdmin = cls && socket.data.accountRole === 'school_admin'
                 && cls.schoolId && cls.schoolId === socket.data.schoolId;
-            const allowed = cls && (cls.teacherUid === socket.uid || sameSchoolStaff || await isClassMember(id, socket.uid));
+            const assignedTeacher = cls && socket.data.accountRole === 'teacher'
+                && cls.teacherUid === socket.uid && cls.schoolId === socket.data.schoolId;
+            const allowed = cls && (assignedTeacher || schoolAdmin || await isClassMember(id, socket.uid));
             if (!allowed) return socket.emit('error_msg', 'Brak dostępu do rankingu tej klasy.');
             const board = publicLeaderboard(await getClassLeaderboard(id, 50), 'points');
             socket.emit('class_leaderboard', { classId: id, board });
@@ -1242,9 +1243,9 @@ io.on('connection', (socket) => {
         if (!socket.uid || socket.data.accountRole !== 'teacher') return null;
         try {
             const cls = await getClass(String(classId || ''));
-            const ownLegacyClass = cls && cls.teacherUid === socket.uid;
-            const sameSchool = cls && cls.schoolId && cls.schoolId === socket.data.schoolId;
-            return (ownLegacyClass || sameSchool) ? cls : null;
+            const assigned = cls && cls.teacherUid === socket.uid
+                && cls.schoolId && cls.schoolId === socket.data.schoolId;
+            return assigned ? cls : null;
         } catch (e) { return null; }
     }
 
@@ -1255,9 +1256,11 @@ io.on('connection', (socket) => {
         try {
             const cls = await getClass(String(classId || ''));
             if (!cls) return null;
-            const schoolStaff = ['teacher', 'school_admin'].includes(socket.data.accountRole)
+            const schoolAdmin = socket.data.accountRole === 'school_admin'
                 && cls.schoolId && cls.schoolId === socket.data.schoolId;
-            return (cls.teacherUid === socket.uid || schoolStaff) ? cls : null;
+            const assignedTeacher = socket.data.accountRole === 'teacher'
+                && cls.teacherUid === socket.uid && cls.schoolId === socket.data.schoolId;
+            return (assignedTeacher || schoolAdmin) ? cls : null;
         } catch (error) { return null; }
     }
 
@@ -1354,7 +1357,8 @@ io.on('connection', (socket) => {
         if (!classId) return socket.emit('error_msg', 'Wybierz aktywną klasę.');
         let cls = null;
         try { cls = await getClass(String(classId)); } catch (e) { /* ignore */ }
-        const canManageClass = cls && (cls.teacherUid === socket.uid || (cls.schoolId && cls.schoolId === socket.data.schoolId));
+        const canManageClass = cls && cls.teacherUid === socket.uid
+            && cls.schoolId && cls.schoolId === socket.data.schoolId;
         if (!canManageClass || cls.active === false) {
             return socket.emit('error_msg', 'Nieprawidłowa lub zamknięta klasa.');
         }
@@ -1446,7 +1450,7 @@ io.on('connection', (socket) => {
             return socket.emit('join_rejected', { reason: 'Do pokoju uczniowskiego może wejść tylko uczeń.' });
         }
         if (room.classId && !await isClassMember(room.classId, socket.uid)) {
-            return socket.emit('join_rejected', { reason: 'Najpierw dołącz do klasy kodem od nauczyciela.' });
+            return socket.emit('join_rejected', { reason: 'To konto nie jest przypisane do klasy prowadzącej te zajęcia.' });
         }
         if (roomHasUid(room, socket.uid)) {
             return socket.emit('join_rejected', { reason: 'To konto jest już w pokoju.' });
@@ -1764,7 +1768,12 @@ io.on('connection', (socket) => {
         if (!checkRateLimit(socket.id, 'request_global_leaderboard', 2, 10000)) return;
         if (!requireAuth()) return;
         try {
-            const board = publicLeaderboard(await getGlobalLeaderboard(20), 'totalXp');
+            if (!socket.data.schoolId) return socket.emit('global_leaderboard', { board: [] });
+            const schoolStudents = (await listSchoolUsers(socket.data.schoolId))
+                .filter(user => user.role === 'student')
+                .sort((a, b) => Number(b.totalXp || 0) - Number(a.totalXp || 0))
+                .slice(0, 50);
+            const board = publicLeaderboard(schoolStudents, 'totalXp');
             socket.emit('global_leaderboard', { board });
         } catch (e) {
             socket.emit('global_leaderboard', { board: [] });

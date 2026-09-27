@@ -120,7 +120,7 @@ async function listClassesByTeacher(teacherUid) {
 async function listClassesForTeacher(teacherUid, schoolId) {
     if (!schoolId) return listClassesByTeacher(teacherUid);
     const q = await db.collection('classes').where('schoolId', '==', schoolId).get();
-    return q.docs.map(d => ({ id: d.id, ...d.data() }));
+    return q.docs.map(d => ({ id: d.id, ...d.data() })).filter(item => item.teacherUid === teacherUid);
 }
 
 // Dopisz ucznia do rosteru klasy (idempotentnie — nie zeruje punktów przy ponownym wejściu).
@@ -284,15 +284,6 @@ async function listClassSessions(classId, limit = 30) {
         .limit(limit)
         .get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-}
-
-// ---------- GLOBAL LEADERBOARD ----------
-async function getGlobalLeaderboard(limit = 20) {
-    const snap = await db.collection('users')
-        .orderBy('totalXp', 'desc')
-        .limit(limit)
-        .get();
-    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
 }
 
 // ---------- INVITATIONS / SCHOOL OPERATIONS ----------
@@ -506,7 +497,6 @@ module.exports = {
     getSchoolDashboard,
     saveClassSession,
     listClassSessions,
-    getGlobalLeaderboard,
     createInvitations,
     getInvitation,
     claimInvitation,

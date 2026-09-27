@@ -1111,6 +1111,33 @@ input[type=number] {
 
 .auth-link-button:hover { color: var(--accent); }
 
+.auth-login-help {
+    margin: -0.65rem 0 1rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.email-verification-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    color: #fde68a;
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: 14px;
+    background: rgba(120, 53, 15, 0.3);
+}
+
+.email-verification-banner b, .email-verification-banner span { display: block; }
+.email-verification-banner span { margin-top: 0.2rem; font-size: 0.82rem; color: #fcd34d; }
+
+@media (max-width: 650px) {
+    .email-verification-banner { align-items: stretch; flex-direction: column; }
+}
+
 @media (max-width: 850px) {
     .ops-columns { grid-template-columns: 1fr; }
     .operations-heading, .ops-event { align-items: stretch; flex-direction: column; }

@@ -126,6 +126,22 @@
             this._createdForRegistration = false;
         },
 
+        sendVerificationEmail: async function () {
+            if (!this._fbUser || !this._fbUser.email || this._fbUser.email.endsWith('.anzan.local')) {
+                return app.ui.toast('To konto nie korzysta z logowania e-mailem.', 'info');
+            }
+            if (this._fbUser.emailVerified) return app.ui.toast('E-mail jest już potwierdzony.', 'success');
+            try {
+                await this._fbUser.sendEmailVerification();
+                app.ui.toast('Wiadomość wysłana. Sprawdź Odebrane i Spam.', 'success');
+            } catch (error) {
+                const code = String(error && error.code || '');
+                app.ui.toast(code.includes('too-many-requests')
+                    ? 'Za dużo prób. Odczekaj kilka minut i spróbuj ponownie.'
+                    : 'Nie udało się wysłać wiadomości potwierdzającej.', 'error');
+            }
+        },
+
         rollbackRegistration: async function () {
             if (!this._createdForRegistration || !this._fbUser) return;
             this._createdForRegistration = false;
@@ -153,6 +169,9 @@
             if (badge) badge.innerText = '👤 ' + name;
             const side = document.getElementById('side-user-name');
             if (side) side.innerText = name;
+            const verifyBanner = document.getElementById('email-verification-banner');
+            const realEmail = this._fbUser && this._fbUser.email && !this._fbUser.email.endsWith('.anzan.local');
+            if (verifyBanner) verifyBanner.style.display = realEmail && !this._fbUser.emailVerified ? 'flex' : 'none';
             // Po przeladowaniu strony _pendingRole jest pusty — bez tego nauczyciel
             // prosilby o role 'student'. Kod nauczyciela NIE jest zapamietywany.
             const role = this._pendingRole || this._recallRole();
@@ -242,6 +261,7 @@
         const title = document.getElementById('auth-heading-title');
         const subtitle = document.getElementById('auth-heading-subtitle');
         const password = document.getElementById('auth-password');
+        const username = document.getElementById('auth-username');
         const reset = document.getElementById('auth-reset-action');
         if (fields) fields.style.display = registering ? 'block' : 'none';
         if (loginActions) loginActions.style.display = registering ? 'none' : 'grid';
@@ -250,8 +270,12 @@
         if (title) title.innerText = registering ? 'Dołącz do swojej szkoły' : 'Wejdź do swojej szkoły';
         if (subtitle) subtitle.innerText = registering
             ? 'Wpisz jednorazowy kod — rola, szkoła i klasa zostaną przypisane automatycznie.'
-            : 'Podaj nazwę użytkownika i hasło.';
+            : 'Pracownik loguje się e-mailem, uczeń bez e-maila nazwą użytkownika.';
         if (password) password.autocomplete = registering ? 'new-password' : 'current-password';
+        if (username) {
+            username.placeholder = registering ? 'wybierz nazwę użytkownika' : 'e-mail lub nazwa ucznia';
+            username.autocomplete = registering ? 'username' : 'username';
+        }
         if (reset) reset.style.display = registering ? 'none' : 'block';
         if (!registering) {
             const code = document.getElementById('auth-teacher-code');
