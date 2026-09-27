@@ -75,6 +75,7 @@ the command updates `server/public/` and the backend copy of the shared generato
 - `users/{uid}` — `name`, `avatar`, `role` (`school_admin`|`teacher`|`student`), `totalXp` (global all-time), `createdAt`.
   **`uid` is the Firebase Auth uid** (persistent), not the socket id.
 - `schools/{schoolId}` — tenant, owner, plan/status and rotatable teacher join code.
+- `schools/{schoolId}/teachers/{uid}` — lightweight staff directory used by the owner dashboard.
 - `classes/{classId}` — `schoolId`, `name`, `teacherUid`, `teacherName`, `schoolYear`, `joinCode`, `active`, `createdAt`.
 - `classes/{classId}/members/{uid}` — `name`, `points` (this class/year), `joinedAt`, `lastActive`.
 - `classes/{classId}/sessions/{sessionId}` — one aggregated lesson report, written when the room closes.
@@ -101,6 +102,7 @@ the command updates `server/public/` and the backend copy of the shared generato
    BOTH `classes/{id}/members/{uid}.points` (class/year ranking) and `users/{uid}.totalXp` (global). Solo modes do NOT affect rankings.
 7. Closing the room writes one aggregated session report. Rankings and reports are delivered over Socket.IO;
    the client never reads Firestore directly.
+8. The school owner dashboard reads aggregate member/session counts and opens detailed class data on demand.
 
 ## Key Design Details
 

@@ -25,6 +25,7 @@ const {
     getSchool,
     findSchoolByTeacherCode,
     rotateSchoolTeacherCode,
+    getSchoolDashboard,
     getGlobalLeaderboard,
     findClassForMember,
     isClassMember,
@@ -698,6 +699,21 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('request_school_dashboard', async () => {
+        if (!checkRateLimit(socket.id, 'request_school_dashboard', 5, 10000)) return;
+        if (!requireAuth()) return;
+        if (socket.data.accountRole !== 'school_admin' || socket.data.schoolRole !== 'owner' || !socket.data.schoolId) {
+            return socket.emit('error_msg', 'Tylko administrator szkoły ma dostęp do panelu nadzorczego.');
+        }
+        try {
+            const dashboard = await getSchoolDashboard(socket.data.schoolId);
+            socket.emit('school_dashboard', dashboard);
+        } catch (error) {
+            console.error('[school_dashboard] error:', error.message);
+            socket.emit('error_msg', 'Nie udało się wczytać panelu szkoły.');
+        }
+    });
+
     // 1b. Klasy (grupy / rok szkolny)
     socket.on('create_class', async ({ name, schoolYear }) => {
         if (!checkRateLimit(socket.id, 'create_class', 5, 10000)) return;
@@ -759,8 +775,9 @@ io.on('connection', (socket) => {
         try {
             const id = String(classId || '');
             const cls = await getClass(id);
-            const sameSchoolTeacher = cls && socket.data.accountRole === 'teacher' && cls.schoolId && cls.schoolId === socket.data.schoolId;
-            const allowed = cls && (cls.teacherUid === socket.uid || sameSchoolTeacher || await isClassMember(id, socket.uid));
+            const sameSchoolStaff = cls && ['teacher', 'school_admin'].includes(socket.data.accountRole)
+                && cls.schoolId && cls.schoolId === socket.data.schoolId;
+            const allowed = cls && (cls.teacherUid === socket.uid || sameSchoolStaff || await isClassMember(id, socket.uid));
             if (!allowed) return socket.emit('error_msg', 'Brak dostępu do rankingu tej klasy.');
             const board = publicLeaderboard(await getClassLeaderboard(id, 50), 'points');
             socket.emit('class_leaderboard', { classId: id, board });
@@ -780,11 +797,24 @@ io.on('connection', (socket) => {
         } catch (e) { return null; }
     }
 
+    // Administrator ma szkolny podgląd, ale operacje zmieniające klasę nadal
+    // przechodzą wyłącznie przez ownsClass(), czyli konto nauczyciela.
+    async function canViewClass(classId) {
+        if (!socket.uid) return null;
+        try {
+            const cls = await getClass(String(classId || ''));
+            if (!cls) return null;
+            const schoolStaff = ['teacher', 'school_admin'].includes(socket.data.accountRole)
+                && cls.schoolId && cls.schoolId === socket.data.schoolId;
+            return (cls.teacherUid === socket.uid || schoolStaff) ? cls : null;
+        } catch (error) { return null; }
+    }
+
     // Roster klasy (dla nauczyciela) — lista uczniów z punktami.
     socket.on('list_class_members', async ({ classId }) => {
         if (!checkRateLimit(socket.id, 'list_class_members', 10, 10000)) return;
         if (!requireAuth()) return;
-        if (!await ownsClass(classId)) return socket.emit('error_msg', 'Brak dostępu do tej klasy.');
+        if (!await canViewClass(classId)) return socket.emit('error_msg', 'Brak dostępu do tej klasy.');
         try {
             const members = await getClassLeaderboard(String(classId), 100);
             socket.emit('class_members', { classId, members });
@@ -848,7 +878,7 @@ io.on('connection', (socket) => {
     socket.on('request_class_report', async ({ classId }) => {
         if (!checkRateLimit(socket.id, 'request_class_report', 5, 10000)) return;
         if (!requireAuth()) return;
-        if (!await ownsClass(classId)) return socket.emit('error_msg', 'Brak dostępu do raportu tej klasy.');
+        if (!await canViewClass(classId)) return socket.emit('error_msg', 'Brak dostępu do raportu tej klasy.');
         try {
             const sessions = await listClassSessions(String(classId), 30);
             socket.emit('class_report', { classId: String(classId), sessions });

@@ -22,6 +22,7 @@ Należy utrzymać tę minimalizację.
 - limity żądań na zdarzeniach Socket.IO,
 - rotowany kod zaproszenia nauczycieli,
 - raporty dostępne wyłącznie nauczycielom danej szkoły,
+- właściciel szkoły ma read-only podgląd klas, uczniów, rankingów i historii własnej organizacji,
 - brak sekretów wdrożeniowych w repozytorium.
 
 ## Procesy wymagane przed produkcją

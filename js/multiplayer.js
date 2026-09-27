@@ -143,13 +143,17 @@
                 this.loadClasses();
             });
             s.on('school_data', (d) => this.renderSchool(d));
+            s.on('school_dashboard', (d) => this.renderSchoolDashboard(d));
             s.on('classes_list', (d) => this.renderClasses(d.classes || []));
             s.on('class_joined', (d) => {
                 this.studentClassId = d.classId;
                 app.ui.toast(`Dołączono do klasy „${d.name}"`, 'success');
                 this.requestClassLeaderboard(d.classId);
             });
-            s.on('class_leaderboard', (d) => this.renderLeaderboard('class', d.board || []));
+            s.on('class_leaderboard', (d) => {
+                if (this.myRole === 'school_admin') this.renderAdminClassLeaderboard(d.classId, d.board || []);
+                else this.renderLeaderboard('class', d.board || []);
+            });
             s.on('global_leaderboard', (d) => this.renderLeaderboard('global', d.board || []));
             s.on('profile_data', (d) => {
                 this.studentClassId = (d && d.classId) || '';
@@ -454,6 +458,8 @@
                 if (onboarding) onboarding.style.display = this.myRole === 'school_admin' ? 'block' : 'none';
                 if (info) info.style.display = 'none';
                 if (teacherSummary) teacherSummary.innerText = '⚠️ Konto nie jest jeszcze przypisane do szkoły — zaloguj się ponownie z kodem zaproszenia administratora.';
+                const dashboard = document.getElementById('admin-dashboard');
+                if (dashboard) dashboard.style.display = 'none';
                 return;
             }
             this.schoolId = school.id;
@@ -472,6 +478,62 @@
                 ${isOwner ? `<div class="school-invite"><div><span class="stat-label">Kod zaproszenia dla nauczycieli</span><strong>${he(school.teacherJoinCode || '—')}</strong></div>
                 <button class="btn btn-secondary" onclick="app.multi.rotateSchoolTeacherCode()">Zmień kod</button></div>` : ''}`;
             if (this.myRole === 'teacher') this.loadClasses();
+            if (this.myRole === 'school_admin') this.requestSchoolDashboard();
+        },
+
+        requestSchoolDashboard: function () {
+            if (this.myRole !== 'school_admin' || !this.schoolId) return;
+            this.init();
+            this.socket.emit('request_school_dashboard');
+        },
+
+        renderSchoolDashboard: function (data) {
+            const panel = document.getElementById('admin-dashboard');
+            const summary = document.getElementById('admin-summary');
+            const teachersBox = document.getElementById('admin-teachers-list');
+            const classesBox = document.getElementById('admin-classes-list');
+            const status = document.getElementById('admin-dashboard-status');
+            if (!panel || !summary || !teachersBox || !classesBox) return;
+            panel.style.display = 'block';
+            const totals = data.totals || {};
+            summary.innerHTML = `
+                <div><b>${Number(totals.teachers) || 0}</b><span>Nauczyciele</span></div>
+                <div><b>${Number(totals.activeClasses) || 0}/${Number(totals.classes) || 0}</b><span>Aktywne klasy</span></div>
+                <div><b>${Number(totals.students) || 0}</b><span>Uczniowie</span></div>
+                <div><b>${Number(totals.sessions) || 0}</b><span>Zakończone zajęcia</span></div>`;
+            teachersBox.innerHTML = (data.teachers || []).length
+                ? data.teachers.map(teacher => `<div class="admin-staff-card"><b>👨‍🏫 ${he(teacher.name || 'Nauczyciel')}</b><div class="stat-label">Konto nauczyciela</div></div>`).join('')
+                : '<div style="color:var(--text-muted)">Brak nauczycieli. Użyj kodu zaproszenia widocznego powyżej.</div>';
+            classesBox.innerHTML = (data.classes || []).length
+                ? data.classes.map(item => `
+                    <div class="admin-class-card">
+                        <div class="report-header" style="margin-bottom:0.6rem;">
+                            <div><b>${he(item.name)}</b> <span style="color:var(--text-muted)">${he(item.schoolYear || '')}</span>
+                            <div class="stat-label">Nauczyciel: ${he(item.teacherName || '—')} · Kod klasy: ${he(item.joinCode || '—')}</div></div>
+                            <span class="school-status ${item.active ? '' : 'is-inactive'}">${item.active ? 'Aktywna' : 'Zamknięta'}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; flex-wrap:wrap;">
+                            <span class="stat-label">👥 ${Number(item.studentCount) || 0} uczniów · 📚 ${Number(item.sessionCount) || 0} zajęć</span>
+                            <span style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                                <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.listClassMembers('${he(item.id)}')">Uczniowie</button>
+                                <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassLeaderboard('${he(item.id)}')">Ranking</button>
+                                <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassReport('${he(item.id)}')">Historia zajęć</button>
+                            </span>
+                        </div>
+                        <div id="members-${he(item.id)}" style="margin-top:0.5rem;"></div>
+                        <div id="admin-ranking-${he(item.id)}" style="margin-top:0.5rem;"></div>
+                        <div id="report-${he(item.id)}" style="margin-top:0.5rem;"></div>
+                    </div>`).join('')
+                : '<div style="color:var(--text-muted)">Brak klas. Nauczyciele mogą utworzyć pierwszą klasę po zalogowaniu.</div>';
+            if (status) status.innerText = `Zaktualizowano ${new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`;
+        },
+
+        renderAdminClassLeaderboard: function (classId, board) {
+            const box = document.getElementById('admin-ranking-' + classId);
+            if (!box) return;
+            box.innerHTML = `<div class="report-panel"><b>🏆 Ranking klasy</b>${(board || []).length
+                ? board.map((row, index) => `<div style="display:flex; justify-content:space-between; padding:0.4rem 0; border-bottom:1px solid var(--glass-border);"><span>${index + 1}. ${he(row.name || 'Uczeń')}</span><b>${Number(row.points) || 0} pkt</b></div>`).join('')
+                : '<div style="color:var(--text-muted); margin-top:0.5rem;">Brak wyników.</div>'}</div>`;
         },
 
         // --- ZARZĄDZANIE KLASAMI (nauczyciel) ---
@@ -523,14 +585,15 @@
         renderClassMembers: function (classId, members) {
             const box = document.getElementById('members-' + classId);
             if (!box) return;
+            const canManage = this.myRole === 'teacher';
             box.innerHTML = (members && members.length)
                 ? members.map(m => `
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:0.3rem 0.4rem; border-top:1px solid var(--glass-border);">
                         <span>${he(m.name || 'Uczeń')} <span style="color:var(--accent)">${m.points || 0} pkt</span></span>
-                        <span style="display:flex; gap:0.3rem;">
+                        ${canManage ? `<span style="display:flex; gap:0.3rem;">
                             <button class="btn btn-secondary" style="font-size:0.7rem" onclick="app.multi.resetMemberPassword('${he(classId)}','${he(m.uid)}')">Reset hasła</button>
                             <button class="btn btn-danger" style="font-size:0.7rem" onclick="app.multi.removeMember('${he(classId)}','${he(m.uid)}')">Usuń</button>
-                        </span>
+                        </span>` : ''}
                     </div>`).join('')
                 : '<div style="color:var(--text-muted); font-size:0.85rem; padding:0.3rem;">Brak uczniów w klasie.</div>';
         },

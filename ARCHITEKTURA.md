@@ -29,6 +29,8 @@ operacji Firestore i koszt. Aktywne pokoje pozostają w pamięci procesu.
 - Tożsamość pochodzi z tokenu Firebase Auth zweryfikowanego przez serwer.
 - Klient nie ma bezpośredniego dostępu do Firestore (`firestore.rules` blokuje wszystko).
 - Administrator tworzy organizację i zaprasza nauczycieli; nauczyciel prowadzi klasy i zajęcia.
+- Administrator ma szkolny podgląd nauczycieli, klas, uczniów, rankingów i raportów, ale operacje
+  takie jak reset hasła, usuwanie ucznia, zamykanie klasy i prowadzenie pokoju pozostają u nauczyciela.
 - Kod szkoły zaprasza nauczyciela, a administrator może go w każdej chwili obrócić.
 - `schools.status = active` jest lekkim przełącznikiem licencji. Zawieszenie blokuje nowe klasy i pokoje.
 

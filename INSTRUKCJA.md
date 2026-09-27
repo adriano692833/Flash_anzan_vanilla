@@ -20,6 +20,8 @@ natomiast postęp trybów solo (Flash, Głosowy, Arkusz, Survival) pozostaje lok
 1. Administrator wpisuje nazwę placówki i wybiera **Utwórz szkołę**.
 2. Administrator widzi kod zaproszenia. Przekazuje go tylko nauczycielom swojej placówki.
 3. Przycisk **Zmień kod** unieważnia poprzedni kod bez wpływu na istniejące konta.
+4. **Panel właściciela szkoły** pokazuje nauczycieli, wszystkie klasy, liczbę uczniów i zajęć.
+   Przy każdej klasie administrator może otworzyć listę uczniów, ranking i historię zajęć z raportem CSV.
 
 ### 3. Utwórz klasę (nauczyciel, raz na rok szkolny)
 1. W panelu nauczyciela: **Moje klasy** → wpisz **nazwę klasy** i **rok** (np. 2025/2026) → **Utwórz klasę**.

@@ -35,6 +35,15 @@ async function registerUser(uid, { name, avatar, role, schoolId, schoolRole }) {
         if (schoolRole) update.schoolRole = schoolRole;
         await userRef.update(update);
     }
+    // Lekki katalog pracowników szkoły: administrator nie musi skanować profili
+    // wszystkich uczniów, aby wyświetlić listę nauczycieli.
+    if (role === 'teacher' && schoolId) {
+        await db.collection('schools').doc(schoolId).collection('teachers').doc(uid).set({
+            name,
+            role: 'teacher',
+            lastActive: Firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    }
     return userRef;
 }
 
@@ -236,6 +245,48 @@ async function rotateSchoolTeacherCode(schoolId, teacherJoinCode) {
     await db.collection('schools').doc(schoolId).update({ teacherJoinCode });
 }
 
+// Jeden odczyt panelu właściciela. Dla każdej klasy używamy tanich agregacji
+// count(), zamiast pobierać wszystkie dokumenty uczniów i sesji.
+async function getSchoolDashboard(schoolId) {
+    const [teachersSnap, classesSnap] = await Promise.all([
+        db.collection('schools').doc(schoolId).collection('teachers').get(),
+        db.collection('classes').where('schoolId', '==', schoolId).get()
+    ]);
+    const teachers = teachersSnap.docs.map(doc => ({
+        name: doc.data().name || 'Nauczyciel'
+    }));
+    const classes = await Promise.all(classesSnap.docs.map(async doc => {
+        const [membersCount, sessionsCount] = await Promise.all([
+            doc.ref.collection('members').count().get(),
+            doc.ref.collection('sessions').count().get()
+        ]);
+        const data = doc.data();
+        return {
+            id: doc.id,
+            name: data.name || 'Klasa',
+            teacherName: data.teacherName || '—',
+            schoolYear: data.schoolYear || '',
+            joinCode: data.joinCode || '',
+            active: data.active !== false,
+            studentCount: membersCount.data().count,
+            sessionCount: sessionsCount.data().count
+        };
+    }));
+    classes.sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'pl'));
+    teachers.sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+    return {
+        teachers,
+        classes,
+        totals: {
+            teachers: teachers.length,
+            classes: classes.length,
+            activeClasses: classes.filter(item => item.active).length,
+            students: classes.reduce((sum, item) => sum + item.studentCount, 0),
+            sessions: classes.reduce((sum, item) => sum + item.sessionCount, 0)
+        }
+    };
+}
+
 // ---------- SESSION REPORTS ----------
 // Jedna lekcja = jeden dokument zbiorczy. Statystyki są agregowane w pamięci
 // podczas zajęć i zapisywane dopiero przy zamknięciu pokoju, co ogranicza koszty.
@@ -291,6 +342,7 @@ module.exports = {
     getSchool,
     findSchoolByTeacherCode,
     rotateSchoolTeacherCode,
+    getSchoolDashboard,
     saveClassSession,
     listClassSessions,
     getGlobalLeaderboard,

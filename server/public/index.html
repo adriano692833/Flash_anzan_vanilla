@@ -471,6 +471,20 @@
                                 <b>Zakres administratora</b>
                                 <p style="color:var(--text-muted); margin:0.5rem 0 0;">Tworzenie szkoły, aktywacja licencji i zapraszanie nauczycieli. Klasy oraz zajęcia prowadzą konta nauczycieli.</p>
                             </div>
+                            <div id="admin-dashboard" class="glass-card" style="max-width:900px; margin:0 auto 1.5rem auto; display:none;">
+                                <div class="report-header">
+                                    <div>
+                                        <h2 style="margin:0;">📊 Panel właściciela szkoły</h2>
+                                        <div id="admin-dashboard-status" class="stat-label">Dane całej organizacji</div>
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="app.multi.requestSchoolDashboard()">Odśwież</button>
+                                </div>
+                                <div id="admin-summary" class="report-kpis"></div>
+                                <h3>👨‍🏫 Nauczyciele</h3>
+                                <div id="admin-teachers-list" class="admin-staff-grid"></div>
+                                <h3 style="margin-top:1.25rem;">🏫 Klasy, uczniowie i historia zajęć</h3>
+                                <div id="admin-classes-list"></div>
+                            </div>
                         </div>
 
                         <!-- PANEL NAUCZYCIELA -->
