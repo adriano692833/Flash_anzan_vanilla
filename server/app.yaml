@@ -2,8 +2,8 @@ runtime: nodejs22
 env: standard
 instance_class: F1
 
-# Sekretu nauczyciela nie przechowujemy w repozytorium. Przed wdrożeniem skopiuj
-# ten plik do ignorowanego app.deploy.yaml i dodaj tam TEACHER_ACCESS_CODE.
+# Zaproszenia są jednorazowe i przechowywane w Firestore jako skróty. Stały kod
+# bootstrap nie jest potrzebny w normalnym wdrożeniu.
 
 # max_instances MUST stay at 1: all room state is in-memory.
 # Increasing this without a shared state store (e.g. Redis) would

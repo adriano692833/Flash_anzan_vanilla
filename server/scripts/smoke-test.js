@@ -47,8 +47,9 @@ async function verify() {
         const healthData = JSON.parse(health.body);
         const manifestData = JSON.parse(manifest.body);
         const ok = home.status === 200 && home.body.includes('Flash Anzan')
-            && home.body.includes('Administrator szkoły')
+            && home.body.includes('Jednorazowy kod zaproszenia')
             && home.body.includes('Panel właściciela szkoły')
+            && home.body.includes('Plan, zadania i organizacja')
             && health.status === 200 && healthData.status === 'ok'
             && manifest.status === 200 && manifestData.short_name === 'Flash Anzan';
         finish(ok ? 0 : 1, ok ? 'Smoke test HTTP/PWA: OK' : 'Smoke test HTTP/PWA: niepełna odpowiedź aplikacji.');

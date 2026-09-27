@@ -51,28 +51,28 @@
                 <h2 id="auth-heading-title">Wejdź do swojej szkoły</h2>
                 <p id="auth-heading-subtitle">Podaj nazwę użytkownika i hasło.</p>
             </div>
-            <label class="stat-label">Nazwa użytkownika</label>
+            <label class="stat-label">Nazwa użytkownika lub e-mail</label>
             <input type="text" id="auth-username" class="input-lg" placeholder="np. ania2016"
                 style="margin-bottom: 1rem;" autocomplete="username">
             <label class="stat-label">Hasło</label>
             <input type="password" id="auth-password" class="input-lg" placeholder="min. 6 znaków"
                 style="margin-bottom: 1rem;" autocomplete="current-password">
             <div id="auth-registration-fields" class="auth-registration-fields" style="display:none;">
-                <label class="stat-label">Kim jesteś?</label>
-                <select id="auth-role" class="input-lg" style="margin-bottom: 1rem;" onchange="authToggleRole()">
-                    <option value="student">🎓 Uczeń</option>
-                    <option value="teacher">👨‍🏫 Nauczyciel</option>
-                    <option value="school_admin">🛡️ Administrator szkoły</option>
-                </select>
-                <div id="auth-teacher-code-row" style="display:none; margin-bottom: 1rem;">
-                    <label id="auth-code-label" class="stat-label">Kod zaproszenia szkoły</label>
-                    <input type="password" id="auth-teacher-code" class="input-lg" placeholder="kod od administratora szkoły">
+                <div id="auth-teacher-code-row" style="margin-bottom: 1rem;">
+                    <label id="auth-code-label" class="stat-label">Jednorazowy kod zaproszenia</label>
+                    <input type="text" id="auth-teacher-code" class="input-lg" placeholder="XXXX-XXXX-XXXX" autocomplete="one-time-code">
+                    <p class="field-help">Kod określa rolę, szkołę i klasę. Otrzymasz go od właściciela szkoły lub nauczyciela.</p>
                 </div>
+                <label class="stat-label">E-mail kontaktowy</label>
+                <input type="email" id="auth-contact-email" class="input-lg" placeholder="wymagany dla pracowników i opiekunów" autocomplete="email" style="margin-bottom:1rem;">
+                <label class="stat-label">Telefon kontaktowy <span style="font-weight:400; color:var(--text-muted)">(opcjonalnie)</span></label>
+                <input type="tel" id="auth-contact-phone" class="input-lg" placeholder="np. +48123456789" autocomplete="tel" style="margin-bottom:1rem;">
             </div>
             <div id="auth-login-actions" class="auth-actions">
                 <button class="btn btn-primary" onclick="authSubmit('login')">Zaloguj</button>
                 <button class="btn btn-secondary" onclick="authSetMode('register')">Załóż konto</button>
             </div>
+            <button id="auth-reset-action" class="auth-link-button" onclick="authResetPassword()">Nie pamiętam hasła</button>
             <div id="auth-register-actions" class="auth-actions" style="display:none;">
                 <button class="btn btn-primary" onclick="authSubmit('register')">Załóż konto</button>
                 <button class="btn btn-secondary" onclick="authSetMode('login')">Wróć do logowania</button>
@@ -116,6 +116,7 @@
                 <div class="nav-item" onclick="nav('spoken')">🗣️ Głosowy</div>
                 <div class="nav-item" onclick="nav('worksheet')">📝 Arkusz</div>
                 <div class="nav-item" onclick="nav('multiplayer')" style="color: var(--accent);">🌐 Multiplayer</div>
+                <div class="nav-item" onclick="nav('school-operations')">🗓️ Plan szkoły</div>
                 <div class="nav-item" onclick="nav('settings')">⚙️ Ustawienia</div>
                 <div class="nav-item" onclick="app.auth.logout()" style="color:#fca5a5;">🚪 Wyloguj</div>
             </nav>
@@ -489,6 +490,94 @@
                 </div>
             </div>
 
+            <div id="school-operations" class="screen">
+                <div class="operations-heading">
+                    <div>
+                        <span class="eyebrow-label">SZKOŁA · EUROPE/WARSAW</span>
+                        <h1>Plan, zadania i organizacja</h1>
+                        <p>Jedno miejsce dla właściciela szkoły, nauczycieli, uczniów i opiekunów.</p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="app.schoolOps.load()">Odśwież</button>
+                </div>
+
+                <div id="ops-summary" class="report-kpis"></div>
+
+                <section id="ops-invites-card" class="glass-card ops-card" style="display:none;">
+                    <div class="settings-card-heading">
+                        <div><span class="eyebrow-label">BEZPIECZNY ONBOARDING</span><h2>Zaproszenia i pula kodów</h2>
+                        <p>Każdy kod działa raz, wygasa automatycznie i przypisuje właściwą rolę oraz klasę.</p></div>
+                    </div>
+                    <div class="ops-form-grid">
+                        <label><span>Typ konta</span><select id="ops-invite-role" class="input-lg" onchange="app.schoolOps.updateInviteForm()"><option value="student">Uczeń</option><option value="teacher">Nauczyciel</option><option value="guardian">Opiekun</option></select></label>
+                        <label id="ops-invite-class-field"><span>Klasa</span><select id="ops-invite-class" class="input-lg" onchange="app.schoolOps.loadInviteStudents()"></select></label>
+                        <label id="ops-invite-student-field" style="display:none"><span>Uczeń</span><select id="ops-invite-student" class="input-lg"></select></label>
+                        <label><span>Liczba kodów</span><input id="ops-invite-count" type="number" min="1" max="30" value="1" class="input-lg"></label>
+                        <label><span>Ważność (dni)</span><input id="ops-invite-days" type="number" min="1" max="30" value="7" class="input-lg"></label>
+                        <label><span>E-mail adresata</span><input id="ops-invite-email" type="email" class="input-lg" placeholder="opcjonalnie dla jednego kodu"></label>
+                        <label><span>Telefon adresata</span><input id="ops-invite-phone" type="tel" class="input-lg" placeholder="opcjonalnie"></label>
+                    </div>
+                    <button class="btn btn-primary" onclick="app.schoolOps.createInvites()">Wygeneruj bezpieczne kody</button>
+                    <div id="ops-new-invites" class="ops-code-results"></div>
+                    <h3>Ostatnie zaproszenia</h3>
+                    <div id="ops-invites-list" class="ops-list"></div>
+                </section>
+
+                <section id="ops-class-editor" class="glass-card ops-card" style="display:none;">
+                    <span class="eyebrow-label">STRUKTURA SZKOŁY</span><h2>Utwórz klasę i przypisz nauczyciela</h2>
+                    <div class="ops-inline"><input id="ops-class-name" class="input-lg" placeholder="Nazwa klasy"><input id="ops-class-year" class="input-lg" placeholder="Rok np. 2026/2027"><select id="ops-class-teacher" class="input-lg"></select><button class="btn btn-primary" onclick="app.schoolOps.createClass()">Utwórz klasę</button></div>
+                </section>
+
+                <section id="ops-schedule-editor" class="glass-card ops-card" style="display:none;">
+                    <span class="eyebrow-label">PLAN LEKCJI</span><h2>Dodaj zajęcia</h2>
+                    <div class="ops-form-grid">
+                        <label><span>Tytuł</span><input id="ops-event-title" class="input-lg" value="Zajęcia Anzan" maxlength="80"></label>
+                        <label><span>Klasa</span><select id="ops-event-class" class="input-lg"></select></label>
+                        <label id="ops-event-teacher-field"><span>Nauczyciel</span><select id="ops-event-teacher" class="input-lg"></select></label>
+                        <label><span>Rodzaj</span><select id="ops-event-kind" class="input-lg" onchange="app.schoolOps.updateScheduleForm()"><option value="weekly">Co tydzień</option><option value="once">Jednorazowo</option></select></label>
+                        <label id="ops-event-weekday-field"><span>Dzień tygodnia</span><select id="ops-event-weekday" class="input-lg"><option value="1">Poniedziałek</option><option value="2">Wtorek</option><option value="3">Środa</option><option value="4">Czwartek</option><option value="5">Piątek</option><option value="6">Sobota</option><option value="0">Niedziela</option></select></label>
+                        <label id="ops-event-date-field" style="display:none"><span>Data</span><input id="ops-event-date" type="date" class="input-lg"></label>
+                        <label id="ops-event-from-field"><span>Od</span><input id="ops-event-from" type="date" class="input-lg"></label>
+                        <label id="ops-event-until-field"><span>Do</span><input id="ops-event-until" type="date" class="input-lg"></label>
+                        <label><span>Godzina</span><input id="ops-event-time" type="time" value="16:00" class="input-lg"></label>
+                        <label><span>Czas (min)</span><input id="ops-event-duration" type="number" min="15" max="360" value="60" class="input-lg"></label>
+                        <label><span>Sala / link online</span><input id="ops-event-location" class="input-lg" placeholder="Sala 2 lub link"></label>
+                    </div>
+                    <button class="btn btn-primary" onclick="app.schoolOps.createEvent()">Dodaj do planu</button>
+                </section>
+
+                <div class="ops-columns">
+                    <section class="glass-card ops-card"><span class="eyebrow-label">NAJBLIŻSZE</span><h2>Plan zajęć</h2><div id="ops-events-list" class="ops-list"></div><button class="btn btn-secondary" onclick="app.schoolOps.exportIcs()">Eksportuj kalendarz .ICS</button></section>
+                    <section class="glass-card ops-card"><span class="eyebrow-label">PRACA WŁASNA</span><h2>Zadania domowe</h2><div id="ops-assignments-list" class="ops-list"></div></section>
+                </div>
+
+                <section id="ops-assignment-editor" class="glass-card ops-card" style="display:none;">
+                    <span class="eyebrow-label">DLA KLASY</span><h2>Opublikuj zadanie</h2>
+                    <div class="ops-form-grid">
+                        <label><span>Klasa</span><select id="ops-assignment-class" class="input-lg"></select></label>
+                        <label><span>Tytuł</span><input id="ops-assignment-title" class="input-lg" maxlength="100"></label>
+                        <label><span>Termin</span><input id="ops-assignment-date" type="date" class="input-lg"></label>
+                        <label><span>Poziom / konfiguracja</span><input id="ops-assignment-training" class="input-lg" placeholder="np. 12 kyu"></label>
+                        <label class="ops-wide"><span>Opis</span><textarea id="ops-assignment-description" class="input-lg" rows="3" maxlength="500"></textarea></label>
+                    </div>
+                    <button class="btn btn-primary" onclick="app.schoolOps.createAssignment()">Opublikuj zadanie</button>
+                </section>
+
+                <section id="ops-attendance-card" class="glass-card ops-card" style="display:none;"><h2>Lista obecności</h2><div id="ops-attendance"></div></section>
+
+                <section id="ops-family-card" class="glass-card ops-card" style="display:none;">
+                    <span class="eyebrow-label">ODRABIANIE ZAJĘĆ</span><h2>Poproś o termin zastępczy</h2>
+                    <div class="ops-inline"><select id="ops-makeup-event" class="input-lg"></select><input id="ops-makeup-date" type="date" class="input-lg"><input id="ops-makeup-note" class="input-lg" placeholder="Krótka informacja"><button class="btn btn-secondary" onclick="app.schoolOps.requestMakeup()">Wyślij prośbę</button></div>
+                </section>
+
+                <section class="glass-card ops-card">
+                    <span class="eyebrow-label">PRYWATNOŚĆ</span><h2>Twoje dane</h2><div id="ops-contact-summary" class="stat-label"></div>
+                    <div class="ops-inline"><button class="btn btn-secondary" onclick="app.schoolOps.privacyRequest('export')">Poproś o eksport danych</button><button class="btn btn-secondary" onclick="app.schoolOps.privacyRequest('correct')">Poproś o korektę</button><button class="btn btn-danger" onclick="app.schoolOps.privacyRequest('delete')">Poproś o usunięcie konta</button></div>
+                </section>
+
+                <section id="ops-audit-card" class="glass-card ops-card" style="display:none;"><div class="report-header"><div><span class="eyebrow-label">BEZPIECZEŃSTWO</span><h2>Dziennik audytowy</h2></div><button class="btn btn-secondary" onclick="app.schoolOps.loadAudit()">Wczytaj</button></div><div id="ops-audit-list" class="ops-list"></div></section>
+                <section id="ops-requests-card" class="glass-card ops-card" style="display:none;"><span class="eyebrow-label">OBSŁUGA SZKOŁY</span><h2>Wnioski prywatności i odrabiania</h2><div id="ops-requests-list" class="ops-list"></div></section>
+            </div>
+
             <div id="multiplayer" class="screen">
                 <h1 style="margin-bottom: 2rem;">🌐 Multiplayer</h1>
 
@@ -543,7 +632,7 @@
                                 <div id="teacher-school-summary" style="font-weight:700; margin-bottom:0.6rem;"></div>
                                 <div style="font-size:0.9rem; color:var(--text-muted); line-height:1.6;">
                                     <b style="color:var(--text-main)">Jak poprowadzić zajęcia:</b><br>
-                                    1. Utwórz klasę → 2. podaj uczniom <b>kod klasy</b> (raz na rok) →
+                                    1. Utwórz klasę → 2. wygeneruj uczniom <b>jednorazowe zaproszenia</b> →
                                     3. utwórz pokój → 4. podaj uczniom <b>kod pokoju</b> →
                                     5. wpuść pukających → 6. <b>START GRY</b>.
                                 </div>
@@ -579,16 +668,8 @@
                             <div class="glass-card" style="max-width:600px; margin:0 auto 1rem auto; border-left:3px solid var(--accent);">
                                 <div style="font-size:0.9rem; color:var(--text-muted); line-height:1.6;">
                                     <b style="color:var(--text-main)">Jak dołączyć:</b><br>
-                                    1. Wpisz <b>kod klasy</b> od nauczyciela (tylko raz) →
-                                    2. na każde zajęcia wpisz <b>kod pokoju</b> i poczekaj, aż nauczyciel Cię wpuści.
-                                </div>
-                            </div>
-                            <div class="glass-card" style="max-width:600px; margin:0 auto 1.5rem auto;">
-                                <h2 style="margin-bottom:1rem;">🎓 Moja klasa</h2>
-                                <label class="stat-label">Kod klasy (od nauczyciela)</label>
-                                <div style="display:flex; gap:0.5rem;">
-                                    <input type="text" id="join-class-code" class="input-lg" placeholder="np. ABC123" style="flex:1; text-transform:uppercase;">
-                                    <button class="btn btn-secondary" onclick="app.multi.joinClass()">Dołącz do klasy</button>
+                                    Klasa została przypisana podczas zakładania konta. Na każde zajęcia wpisz
+                                    <b>kod pokoju</b> i poczekaj, aż nauczyciel Cię wpuści.
                                 </div>
                             </div>
                             <div class="glass-card" style="max-width:600px; margin:0 auto 1.5rem auto;">
@@ -662,6 +743,7 @@
             <div class="mobile-nav-item" onclick="nav('flash')">⚡</div>
             <div class="mobile-nav-item" onclick="nav('spoken')">🗣️</div>
             <div class="mobile-nav-item" onclick="nav('worksheet')">📝</div>
+            <div class="mobile-nav-item" onclick="nav('school-operations')">🗓️</div>
             <div class="mobile-nav-item" onclick="nav('settings')">⚙️</div>
             <div class="mobile-nav-item" onclick="app.auth.logout()" title="Wyloguj">🚪</div>
         </div>
@@ -704,6 +786,7 @@
     <script src="js/ui.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/multiplayer.js"></script>
+    <script src="js/school-operations.js"></script>
     <script src="js/main.js"></script>
 </body>
 

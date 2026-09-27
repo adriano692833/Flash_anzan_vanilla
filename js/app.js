@@ -80,7 +80,7 @@ const KYU_VERSION = 5;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '6.6 Flash Anzan';
+const APP_VERSION = '7.0 School Operations';
 const APP_UPDATED = '2026-09-27';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -1454,6 +1454,8 @@ function nav(id) {
         document.getElementById('ws-start-overlay').style.display = 'block';
         document.getElementById('ws-content').style.display = 'none';
         if (app.state.timer) clearInterval(app.state.timer);
+    } else if (id === 'school-operations') {
+        if (app.schoolOps && typeof app.schoolOps.load === 'function') app.schoolOps.load();
     }
 
     // Pokazanie ekranu

@@ -58,9 +58,10 @@
         // Połącz i zarejestruj się na serwerze tokenem Firebase. Wołane po zalogowaniu.
         // Rejestracja jest ponawiana przy każdym (re)connect, więc uid jest zawsze ustawiony
         // zanim gracz utworzy/dołączy do pokoju.
-        authenticate: function (role, teacherCode) {
+        authenticate: function (role, teacherCode, contacts) {
             this.pendingRole = role || 'student';
             this.pendingTeacherCode = teacherCode || '';
+            this.pendingContacts = contacts || {};
             this.init();
             if (this.socket && this.socket.connected) this._sendRegister();
         },
@@ -74,7 +75,9 @@
                 name: app.auth.user && app.auth.user.name,
                 avatar: 'default',
                 requestedRole: this.pendingRole,
-                teacherCode: this.pendingTeacherCode
+                inviteCode: this.pendingTeacherCode,
+                contactEmail: this.pendingContacts && this.pendingContacts.contactEmail,
+                contactPhone: this.pendingContacts && this.pendingContacts.contactPhone
             });
         },
 
@@ -85,6 +88,7 @@
             // Unikaj wielokrotnego bindowania na tym samym sockecie
             if (this._socketBound === s) return;
             this._socketBound = s;
+            if (app.schoolOps && typeof app.schoolOps.bindSocket === 'function') app.schoolOps.bindSocket(s);
 
             s.on('connect', () => {
                 console.log('Connected to server');
@@ -115,12 +119,16 @@
                 this.myUid = d.uid;
                 this.schoolId = d.schoolId || '';
                 this.schoolRole = d.schoolRole || '';
+                this.pendingTeacherCode = '';
+                this.pendingContacts = {};
                 this._connectErrors = 0;
                 // Odśwież listę klas nauczyciela / widok po zalogowaniu.
                 if (d.role === 'teacher') {
                     this.loadClasses();
                     this.requestSchool();
                 } else if (d.role === 'school_admin') {
+                    this.requestSchool();
+                } else if (d.role === 'guardian') {
                     this.requestSchool();
                 }
                 if (app.auth && app.auth.confirmRegistration) app.auth.confirmRegistration();
@@ -141,7 +149,7 @@
 
             // --- KLASY I RANKING ---
             s.on('class_created', (d) => {
-                app.ui.modal('Klasa utworzona', `Klasa „${he(d.name)}" gotowa.<br>Kod dołączenia dla uczniów: <b style="font-size:1.3rem; color:var(--accent)">${he(d.joinCode)}</b>`);
+                app.ui.modal('Klasa utworzona', `Klasa „${he(d.name)}" jest gotowa. Uczniów dodaj przez jednorazowe zaproszenia w sekcji „Plan szkoły”.`);
                 this.loadClasses();
             });
             s.on('school_data', (d) => this.renderSchool(d));
@@ -456,10 +464,6 @@
             this.init();
             this.socket.emit('request_school');
         },
-        rotateSchoolTeacherCode: function () {
-            if (!confirm('Wygenerować nowy kod dla nauczycieli? Poprzedni przestanie działać.')) return;
-            this.socket.emit('rotate_school_teacher_code');
-        },
         renderSchool: function (school) {
             const onboarding = document.getElementById('school-onboarding');
             const info = document.getElementById('school-info');
@@ -485,8 +489,7 @@
                     <div class="stat-label">Plan: ${he(school.plan || 'trial')} · ${isOwner ? 'Administrator szkoły' : 'Nauczyciel'}</div></div>
                     <span class="school-status ${school.status === 'active' ? '' : 'is-inactive'}">${school.status === 'active' ? 'Aktywna' : 'Nieaktywna'}</span>
                 </div>
-                ${isOwner ? `<div class="school-invite"><div><span class="stat-label">Kod zaproszenia dla nauczycieli</span><strong>${he(school.teacherJoinCode || '—')}</strong></div>
-                <button class="btn btn-secondary" onclick="app.multi.rotateSchoolTeacherCode()">Zmień kod</button></div>` : ''}`;
+                ${isOwner ? `<div class="school-invite"><div><span class="stat-label">Bezpieczne zaproszenia</span><strong>Jednorazowe kody</strong></div><button class="btn btn-secondary" onclick="nav('school-operations')">Zarządzaj</button></div>` : ''}`;
             if (this.myRole === 'teacher') this.loadClasses();
             if (this.myRole === 'school_admin') this.requestSchoolDashboard();
         },
@@ -519,7 +522,7 @@
                     <div class="admin-class-card">
                         <div class="report-header" style="margin-bottom:0.6rem;">
                             <div><b>${he(item.name)}</b> <span style="color:var(--text-muted)">${he(item.schoolYear || '')}</span>
-                            <div class="stat-label">Nauczyciel: ${he(item.teacherName || '—')} · Kod klasy: ${he(item.joinCode || '—')}</div></div>
+                            <div class="stat-label">Nauczyciel: ${he(item.teacherName || '—')}</div></div>
                             <span class="school-status ${item.active ? '' : 'is-inactive'}">${item.active ? 'Aktywna' : 'Zamknięta'}</span>
                         </div>
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; flex-wrap:wrap;">
@@ -574,7 +577,7 @@
                         <div class="glass-card" style="padding:0.6rem; margin-bottom:0.5rem;">
                             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
                                 <div><b>${he(c.name)}</b> <span style="color:var(--text-muted)">${he(c.schoolYear || '')}${c.active === false ? ' (zamknięta)' : ''}</span><br>
-                                <span style="font-size:0.85rem">Kod: <b style="color:var(--accent)">${he(c.joinCode)}</b></span></div>
+                                <span style="font-size:0.85rem">Uczniowie dołączają przez jednorazowe zaproszenia.</span></div>
                                 <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
                                     <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassLeaderboard('${he(c.id)}')">🏆 Ranking</button>
                                     <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.listClassMembers('${he(c.id)}')">👥 Uczniowie</button>
@@ -700,12 +703,6 @@
         },
 
         // --- KLASA / RANKING (uczeń i nauczyciel) ---
-        joinClass: function () {
-            const code = ((document.getElementById('join-class-code') || {}).value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-            if (!code) return app.ui.toast('Podaj kod klasy.', 'warning');
-            this.init();
-            this.socket.emit('join_class', { joinCode: code });
-        },
         requestClassLeaderboard: function (classId) {
             const id = classId || this.studentClassId;
             if (!id) return app.ui.toast('Najpierw dołącz do klasy.', 'warning');
@@ -750,10 +747,11 @@
             if (a) a.style.display = role === 'school_admin' ? 'block' : 'none';
             if (t) t.style.display = role === 'teacher' ? 'block' : 'none';
             if (s) s.style.display = role === 'student' ? 'block' : 'none';
-            if (ranking) ranking.style.display = role === 'school_admin' ? 'none' : 'block';
+            if (ranking) ranking.style.display = ['school_admin', 'guardian'].includes(role) ? 'none' : 'block';
 
             const label = role === 'school_admin' ? '🛡️ Administrator szkoły'
-                : role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń';
+                : role === 'teacher' ? '👨‍🏫 Nauczyciel'
+                    : role === 'guardian' ? '👪 Opiekun' : '🎓 Uczeń';
             ['auth-role-badge', 'side-role-badge'].forEach((id) => {
                 const badge = document.getElementById(id);
                 if (!badge) return;

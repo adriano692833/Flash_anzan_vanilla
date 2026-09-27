@@ -8,7 +8,7 @@ const db = new Firestore({ databaseId: 'anzan-db' });
 
 // ---------- USERS ----------
 // uid = trwały identyfikator z Firebase Authentication (NIE socket.id).
-async function registerUser(uid, { name, avatar, role, schoolId, schoolRole }) {
+async function registerUser(uid, { name, avatar, role, schoolId, schoolRole, contactEmail, contactPhone, linkedStudentUid }) {
     const userRef = db.collection('users').doc(uid);
     const snap = await userRef.get();
     if (!snap.exists) {
@@ -18,6 +18,9 @@ async function registerUser(uid, { name, avatar, role, schoolId, schoolRole }) {
             role: role || 'student',
             schoolId: schoolId || '',
             schoolRole: schoolRole || '',
+            contactEmail: contactEmail || '',
+            contactPhone: contactPhone || '',
+            linkedStudentUid: linkedStudentUid || '',
             totalXp: 0,
             ownedItems: [],
             createdAt: Firestore.FieldValue.serverTimestamp()
@@ -33,6 +36,9 @@ async function registerUser(uid, { name, avatar, role, schoolId, schoolRole }) {
         else if (role === 'teacher' && cur === 'student') update.role = 'teacher';
         if (schoolId) update.schoolId = schoolId;
         if (schoolRole) update.schoolRole = schoolRole;
+        if (contactEmail) update.contactEmail = contactEmail;
+        if (contactPhone) update.contactPhone = contactPhone;
+        if (linkedStudentUid) update.linkedStudentUid = linkedStudentUid;
         await userRef.update(update);
     }
     // Lekki katalog pracowników szkoły: administrator nie musi skanować profili
@@ -85,14 +91,13 @@ async function findClassForMember(uid) {
 }
 
 // ---------- CLASSES (grupy / rok szkolny) ----------
-async function createClass(classId, { name, teacherUid, teacherName, schoolYear, joinCode, schoolId }) {
+async function createClass(classId, { name, teacherUid, teacherName, schoolYear, schoolId }) {
     const ref = db.collection('classes').doc(classId);
     await ref.set({
         name,
         teacherUid,
         teacherName: teacherName || '',
         schoolYear: schoolYear || '',
-        joinCode,
         schoolId: schoolId || '',
         active: true,
         createdAt: Firestore.FieldValue.serverTimestamp()
@@ -103,18 +108,6 @@ async function createClass(classId, { name, teacherUid, teacherName, schoolYear,
 async function getClass(classId) {
     const snap = await db.collection('classes').doc(classId).get();
     return snap.exists ? { id: snap.id, ...snap.data() } : null;
-}
-
-// Znajdź aktywną klasę po kodzie dołączenia (kod unikalny wśród aktywnych).
-async function findClassByJoinCode(joinCode) {
-    const q = await db.collection('classes')
-        .where('joinCode', '==', joinCode)
-        .where('active', '==', true)
-        .limit(1)
-        .get();
-    if (q.empty) return null;
-    const doc = q.docs[0];
-    return { id: doc.id, ...doc.data() };
 }
 
 async function listClassesByTeacher(teacherUid) {
@@ -193,7 +186,7 @@ async function setClassActive(classId, active) {
 }
 
 // ---------- SCHOOLS / TENANCY ----------
-async function createSchool(schoolId, { name, ownerUid, ownerName, teacherJoinCode }) {
+async function createSchool(schoolId, { name, ownerUid, ownerName }) {
     const ref = db.collection('schools').doc(schoolId);
     const userRef = db.collection('users').doc(ownerUid);
     await db.runTransaction(async transaction => {
@@ -204,7 +197,6 @@ async function createSchool(schoolId, { name, ownerUid, ownerName, teacherJoinCo
             name,
             ownerUid,
             ownerName,
-            teacherJoinCode,
             plan: 'trial',
             status: 'active',
             seatLimit: 100,
@@ -233,22 +225,6 @@ async function getSchool(schoolId) {
     return snap.exists ? { id: snap.id, ...snap.data() } : null;
 }
 
-async function findSchoolByTeacherCode(code) {
-    if (!code) return null;
-    const snap = await db.collection('schools')
-        .where('teacherJoinCode', '==', code)
-        .where('status', '==', 'active')
-        .limit(1)
-        .get();
-    if (snap.empty) return null;
-    const doc = snap.docs[0];
-    return { id: doc.id, ...doc.data() };
-}
-
-async function rotateSchoolTeacherCode(schoolId, teacherJoinCode) {
-    await db.collection('schools').doc(schoolId).update({ teacherJoinCode });
-}
-
 // Jeden odczyt panelu właściciela. Dla każdej klasy używamy tanich agregacji
 // count(), zamiast pobierać wszystkie dokumenty uczniów i sesji.
 async function getSchoolDashboard(schoolId) {
@@ -268,9 +244,9 @@ async function getSchoolDashboard(schoolId) {
         return {
             id: doc.id,
             name: data.name || 'Klasa',
+            teacherUid: data.teacherUid || '',
             teacherName: data.teacherName || '—',
             schoolYear: data.schoolYear || '',
-            joinCode: data.joinCode || '',
             active: data.active !== false,
             studentCount: membersCount.data().count,
             sessionCount: sessionsCount.data().count
@@ -319,6 +295,189 @@ async function getGlobalLeaderboard(limit = 20) {
     return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
 }
 
+// ---------- INVITATIONS / SCHOOL OPERATIONS ----------
+// Id dokumentu zaproszenia jest skrótem SHA-256 kodu. Sam kod istnieje tylko
+// w odpowiedzi po utworzeniu i nie może zostać odczytany z bazy po fakcie.
+async function createInvitations(items) {
+    const batch = db.batch();
+    items.forEach(item => {
+        const ref = db.collection('invitations').doc(item.codeHash);
+        batch.create(ref, {
+            role: item.role,
+            schoolId: item.schoolId || '',
+            classId: item.classId || '',
+            studentUid: item.studentUid || '',
+            schoolName: item.schoolName || '',
+            contactEmail: item.contactEmail || '',
+            contactPhone: item.contactPhone || '',
+            createdBy: item.createdBy,
+            createdByName: item.createdByName || '',
+            status: 'active',
+            expiresAt: Firestore.Timestamp.fromDate(item.expiresAt),
+            createdAt: Firestore.FieldValue.serverTimestamp()
+        });
+    });
+    await batch.commit();
+}
+
+async function getInvitation(codeHash) {
+    const snap = await db.collection('invitations').doc(codeHash).get();
+    return snap.exists ? { id: snap.id, ...snap.data() } : null;
+}
+
+async function claimInvitation(codeHash, uid) {
+    const ref = db.collection('invitations').doc(codeHash);
+    return db.runTransaction(async transaction => {
+        const snap = await transaction.get(ref);
+        if (!snap.exists) throw new Error('INVITE_INVALID');
+        const invite = snap.data();
+        if (invite.status !== 'active') throw new Error('INVITE_USED');
+        const expires = invite.expiresAt && invite.expiresAt.toMillis ? invite.expiresAt.toMillis() : 0;
+        if (!expires || expires <= Date.now()) throw new Error('INVITE_EXPIRED');
+        transaction.update(ref, {
+            status: 'used',
+            usedBy: uid,
+            usedAt: Firestore.FieldValue.serverTimestamp()
+        });
+        return { id: snap.id, ...invite };
+    });
+}
+
+async function listInvitations(schoolId, limit = 100) {
+    const snap = await db.collection('invitations')
+        .where('schoolId', '==', schoolId)
+        .limit(limit)
+        .get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function revokeInvitation(inviteId, schoolId) {
+    const ref = db.collection('invitations').doc(inviteId);
+    await db.runTransaction(async transaction => {
+        const snap = await transaction.get(ref);
+        if (!snap.exists || snap.data().schoolId !== schoolId) throw new Error('INVITE_NOT_FOUND');
+        if (snap.data().status === 'active') {
+            transaction.update(ref, { status: 'revoked', revokedAt: Firestore.FieldValue.serverTimestamp() });
+        }
+    });
+}
+
+async function listSchoolUsers(schoolId) {
+    const snap = await db.collection('users').where('schoolId', '==', schoolId).get();
+    return snap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+}
+
+async function createScheduleEvent(eventId, data) {
+    await db.collection('scheduleEvents').doc(eventId).create({
+        ...data,
+        createdAt: Firestore.FieldValue.serverTimestamp(),
+        updatedAt: Firestore.FieldValue.serverTimestamp()
+    });
+}
+
+async function listScheduleEvents(schoolId) {
+    const snap = await db.collection('scheduleEvents').where('schoolId', '==', schoolId).get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function cancelScheduleEvent(eventId, schoolId, cancelledBy) {
+    const ref = db.collection('scheduleEvents').doc(eventId);
+    await db.runTransaction(async transaction => {
+        const snap = await transaction.get(ref);
+        if (!snap.exists || snap.data().schoolId !== schoolId) throw new Error('EVENT_NOT_FOUND');
+        transaction.update(ref, {
+            status: 'cancelled',
+            cancelledBy,
+            updatedAt: Firestore.FieldValue.serverTimestamp()
+        });
+    });
+}
+
+async function createAssignment(assignmentId, data) {
+    await db.collection('assignments').doc(assignmentId).create({
+        ...data,
+        status: 'active',
+        createdAt: Firestore.FieldValue.serverTimestamp()
+    });
+}
+
+async function listAssignments(schoolId) {
+    const snap = await db.collection('assignments').where('schoolId', '==', schoolId).get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function setAttendance(eventId, occurrenceDate, entries, markedBy) {
+    const batch = db.batch();
+    entries.forEach(entry => {
+        const id = `${occurrenceDate}_${entry.uid}`;
+        const ref = db.collection('scheduleEvents').doc(eventId).collection('attendance').doc(id);
+        batch.set(ref, {
+            uid: entry.uid,
+            name: entry.name || '',
+            occurrenceDate,
+            status: entry.status,
+            markedBy,
+            markedAt: Firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    });
+    await batch.commit();
+}
+
+async function listAttendance(eventId, occurrenceDate) {
+    const snap = await db.collection('scheduleEvents').doc(eventId).collection('attendance')
+        .where('occurrenceDate', '==', occurrenceDate).get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function createPrivacyRequest(requestId, data) {
+    await db.collection('privacyRequests').doc(requestId).create({
+        ...data,
+        status: 'new',
+        createdAt: Firestore.FieldValue.serverTimestamp()
+    });
+}
+
+async function createMakeupRequest(requestId, data) {
+    await db.collection('makeupRequests').doc(requestId).create({
+        ...data,
+        status: 'new',
+        createdAt: Firestore.FieldValue.serverTimestamp()
+    });
+}
+
+async function listSchoolRequests(collectionName, schoolId, limit = 100) {
+    const allowed = new Set(['privacyRequests', 'makeupRequests']);
+    if (!allowed.has(collectionName)) throw new Error('INVALID_COLLECTION');
+    const snap = await db.collection(collectionName).where('schoolId', '==', schoolId).limit(limit).get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function updateSchoolRequest(collectionName, requestId, schoolId, status, resolvedBy) {
+    const allowed = new Set(['privacyRequests', 'makeupRequests']);
+    if (!allowed.has(collectionName)) throw new Error('INVALID_COLLECTION');
+    const ref = db.collection(collectionName).doc(requestId);
+    await db.runTransaction(async transaction => {
+        const snap = await transaction.get(ref);
+        if (!snap.exists || snap.data().schoolId !== schoolId) throw new Error('REQUEST_NOT_FOUND');
+        transaction.update(ref, {
+            status,
+            resolvedBy,
+            updatedAt: Firestore.FieldValue.serverTimestamp()
+        });
+    });
+}
+
+async function auditLog(schoolId, actorUid, action, details) {
+    const ref = db.collection('schools').doc(schoolId).collection('auditLogs').doc();
+    await ref.set({ actorUid, action, details: details || {}, createdAt: Firestore.FieldValue.serverTimestamp() });
+}
+
+async function listAuditLogs(schoolId, limit = 100) {
+    const snap = await db.collection('schools').doc(schoolId).collection('auditLogs')
+        .orderBy('createdAt', 'desc').limit(limit).get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
 async function healthCheck() {
     try {
         await db.collection('_health').limit(1).get();
@@ -335,7 +494,6 @@ module.exports = {
     updateTrainingPresets,
     createClass,
     getClass,
-    findClassByJoinCode,
     listClassesByTeacher,
     listClassesForTeacher,
     addClassMember,
@@ -345,12 +503,29 @@ module.exports = {
     setClassActive,
     createSchool,
     getSchool,
-    findSchoolByTeacherCode,
-    rotateSchoolTeacherCode,
     getSchoolDashboard,
     saveClassSession,
     listClassSessions,
     getGlobalLeaderboard,
+    createInvitations,
+    getInvitation,
+    claimInvitation,
+    listInvitations,
+    revokeInvitation,
+    listSchoolUsers,
+    createScheduleEvent,
+    listScheduleEvents,
+    cancelScheduleEvent,
+    createAssignment,
+    listAssignments,
+    setAttendance,
+    listAttendance,
+    createPrivacyRequest,
+    createMakeupRequest,
+    listSchoolRequests,
+    updateSchoolRequest,
+    auditLog,
+    listAuditLogs,
     getMemberPoints,
     isClassMember,
     findClassForMember,

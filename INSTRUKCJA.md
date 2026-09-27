@@ -1,80 +1,63 @@
-# Flash Anzan — instrukcja dla nauczycieli i uczniów
+# Flash Anzan School Operations — instrukcja
 
 Aplikacja: **https://anzan-web.ew.r.appspot.com**
 
-Konto jest wymagane przy wejściu do aplikacji. Wyniki zajęć są przechowywane na koncie,
-natomiast postęp trybów solo (Flash, Głosowy, Arkusz, Survival) pozostaje lokalnie w przeglądarce.
+## Bezpieczne zakładanie szkoły i kont
 
-### Poziomy Kyū i trening indywidualny
+Nie ma otwartej rejestracji ani wyboru roli przez użytkownika. Każde nowe konto wymaga
+jednorazowego kodu, który przypisuje rolę, szkołę, a uczniowi również klasę.
 
-Lista zawiera standardową drabinkę **20 Kyū → 1 Kyū**. Nad 20 Kyū znajduje się opcja
-**Indywidualny — utwórz własny**. Uczeń lub nauczyciel może nazwać profil i ustawić rodzaj gry,
-działanie, zakresy liczb, długość serii, czas prezentacji oraz dozwoloną technikę sorobanu.
-Zapisane profile są synchronizowane z kontem i pojawiają się w odpowiednich ekranach treningu.
+1. Operator platformy tworzy zaproszenie właściciela szkoły:
+   `cd server` i `npm run invite:owner -- --school "Nazwa szkoły" --email owner@example.com --days 7`.
+   Parametr `--email` można pominąć; wtedy kod nadal jest jednorazowy, a owner poda e-mail przy rejestracji.
+2. Właściciel otwiera wygenerowany link, zakłada konto, podaje przypisany e-mail i tworzy szkołę.
+   Przed operacjami administracyjnymi potwierdza e-mail i loguje się ponownie.
+3. W **Plan szkoły → Zaproszenia** właściciel tworzy jednorazowe zaproszenia nauczycieli.
+4. Właściciel tworzy klasę i przypisuje nauczyciela. Właściciel lub nauczyciel tworzy pulę
+   kodów uczniowskich dla konkretnej klasy.
+5. Dla opiekuna tworzy się osobne zaproszenie powiązane z konkretnym uczniem.
 
----
+Kod jest widoczny w całości tylko przy tworzeniu, wygasa po 1–30 dniach i działa jeden raz.
+Można skopiować kod albo gotowy link rejestracyjny. Automatyczna wysyłka e-mail/SMS wymaga
+podłączenia zewnętrznego dostawcy; aplikacja nie udaje wysłania wiadomości.
 
-## Dla NAUCZYCIELA
+## Plan szkoły
 
-### 1. Załóż konto
-1. Wejdź na stronę → zakładka **🌐 Multiplayer**.
-2. Kliknij **Załóż konto**, a następnie wpisz **nazwę** i **hasło** (min. 6 znaków).
-3. W formularzu rejestracji pierwsza osoba wybiera **Administrator szkoły** i wpisuje kod uruchomieniowy platformy.
-   Nauczyciel wybiera rolę **Nauczyciel** i używa kodu zaproszenia otrzymanego od administratora szkoły.
-4. Kliknij **Załóż konto** (następnym razem **Zaloguj**).
+Właściciel widzi całą szkołę, a nauczyciel tylko przypisane klasy i zajęcia. Można dodać
+zajęcia jednorazowe albo cotygodniowe, przypisać klasę, nauczyciela, salę/link i okres trwania.
+Serwer blokuje kolizje nauczyciela, klasy i sali. Uczeń i opiekun widzą wyłącznie plan swojej
+klasy. Plan można wyeksportować jako `.ics`; strefą źródłową jest `Europe/Warsaw`.
 
-### 2. Skonfiguruj szkołę (administrator)
-1. Administrator wpisuje nazwę placówki i wybiera **Utwórz szkołę**.
-2. Administrator widzi kod zaproszenia. Przekazuje go tylko nauczycielom swojej placówki.
-3. Przycisk **Zmień kod** unieważnia poprzedni kod bez wpływu na istniejące konta.
-4. **Panel właściciela szkoły** pokazuje nauczycieli, wszystkie klasy, liczbę uczniów i zajęć.
-   Przy każdej klasie administrator może otworzyć listę uczniów, ranking i historię zajęć z raportem CSV.
+## Zadania, obecność i odrabianie
 
-### 3. Utwórz klasę (nauczyciel, raz na rok szkolny)
-1. W panelu nauczyciela: **Moje klasy** → wpisz **nazwę klasy** i **rok** (np. 2025/2026) → **Utwórz klasę**.
-2. Dostaniesz **kod dołączenia** (np. `ABC123`) — podaj go uczniom.
+- Nauczyciel publikuje zadanie z terminem, opisem i poziomem Kyū/konfiguracją treningu.
+- Przy zajęciach pracownik otwiera listę obecności i oznacza: obecny, nieobecny, spóźniony,
+  usprawiedliwiony.
+- Uczeń lub opiekun może wysłać prośbę o termin odrobienia zajęć.
+- Właściciel ma dziennik audytowy najważniejszych działań.
 
-### 4. Poprowadź zajęcia (pokój)
-1. W **Utwórz pokój**: wybierz **klasę**, **poziom (Kyu)** i **tryb gry** → **Utwórz pokój**.
-2. Podaj uczniom **kod pokoju** albo poproś, by dołączyli.
-3. Gdy uczeń „puka" — kliknij **Wpuść** (lub Odrzuć). Możesz **zablokować** pokój i **usuwać** graczy.
-4. **START GRY** → dzieci liczą; **Następne zadanie** steruje tempem w trybie ręcznym.
-   Tryb automatyczny przechodzi dalej po odpowiedzi wszystkich aktywnych uczniów.
+## Zajęcia Flash Anzan
 
-### 5. Raporty, zarządzanie i ranking
-- **Raport** przy klasie → skuteczność, próby, średni czas i XP uczniów z ostatnich 30 zajęć.
-- **Eksport CSV** → plik do arkusza kalkulacyjnego lub dokumentacji postępów.
-- **Uczniowie** przy klasie → lista uczniów: **usuń** ucznia lub **zresetuj hasło** (dostaniesz tymczasowe hasło do przekazania).
-- **Ranking** → **Klasa** (za bieżący rok) lub **Globalny** (wszyscy, od zawsze).
-- **Zamknij** klasę na koniec roku (uczniowie nie dołączą już tym kodem; ranking klasy zostaje).
+Nauczyciel otwiera **Multiplayer**, wybiera klasę, poziom 20 Kyū–1 Kyū albo własną konfigurację,
+tworzy krótkotrwały pokój i przekazuje jego kod obecnym uczniom. Kod pokoju nie służy do
+zakładania konta ani dołączania do klasy.
 
-> Punkty do rankingu liczą się **tylko z zajęć online** (pokój). Ćwiczenia solo nie wpływają na ranking.
+## Dane i prywatność
 
----
+E-mail jest wymagany dla właściciela, nauczyciela i opiekuna. Dla ucznia jest opcjonalny;
+telefon jest zawsze opcjonalny. W **Plan szkoły → Twoje dane** użytkownik może zgłosić eksport,
+korektę lub usunięcie danych. Wniosek wymaga weryfikacji administratora; dane wymagane prawem
+mogą podlegać okresowi retencji.
 
-## Dla UCZNIA
-
-### 1. Załóż konto
-1. Wejdź na stronę → zakładka **🌐 Multiplayer**.
-2. Kliknij **Załóż konto**, wpisz **nazwę** i **hasło**, a następnie wybierz rolę **Uczeń**.
-3. Zapamiętaj nazwę i hasło — będziesz się nimi logować na każdych zajęciach (na dowolnym urządzeniu).
-   Jeśli zapomnisz hasła — poproś nauczyciela o reset.
-
-### 2. Dołącz do klasy (raz)
-- **Moja klasa** → wpisz **kod klasy** od nauczyciela → **Dołącz do klasy**.
-
-### 3. Graj na zajęciach
-- **Dołącz do zajęć** → wpisz **kod pokoju** → **Dołącz** → poczekaj, aż nauczyciel Cię wpuści.
-- Licz w pamięci i wpisuj wynik. Za poprawne odpowiedzi zdobywasz **punkty do rankingu**.
-
-### 4. Ranking
-- **Klasa** — Twoje miejsce w grupie w tym roku. **Globalny** — wszyscy uczniowie.
-
----
+Nowe konto z e-mailem loguje się tym adresem; konto bez e-maila — nazwą użytkownika. Przycisk **Nie pamiętam
+hasła** wysyła bezpieczny link Firebase na podany e-mail. Konto ucznia bez e-maila resetuje
+nauczyciel w liście uczniów. Odzyskiwanie przez SMS wymaga zewnętrznego dostawcy i pozostaje
+wyłączone, dopóki taka usługa nie zostanie podłączona.
 
 ## Najczęstsze problemy
-- **„Błędny kod szkoły”** — poproś właściciela szkoły o aktualny kod zaproszenia.
-- **„Licencja szkoły jest nieaktywna”** — administrator musi ponownie aktywować placówkę.
-- **Nie widzę pokoju / „Gra w toku"** — poproś nauczyciela o wpuszczenie (przycisk „Poproś").
-- **Zapomniane hasło ucznia** — nauczyciel resetuje je w **Uczniowie → Reset hasła**.
-- **Tryb Głosowy brzmi dziwnie / milczy** — brak polskiego głosu w systemie; użyj trybu **Flash**.
+
+- **Kod jest błędny/wygasł/wykorzystany** — właściciel lub nauczyciel tworzy nowe zaproszenie.
+- **E-mail nie zgadza się z zaproszeniem** — użyj adresu przypisanego przez szkołę.
+- **Kolizja planu** — zmień nauczyciela, klasę, salę albo godzinę.
+- **Licencja szkoły jest nieaktywna** — operator musi ją aktywować.
+- **Nie widzę pokoju** — poproś nauczyciela o bieżący kod krótkotrwałego pokoju.

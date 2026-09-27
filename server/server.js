@@ -13,7 +13,6 @@ const {
     updateTrainingPresets,
     createClass,
     getClass,
-    findClassByJoinCode,
     listClassesForTeacher,
     addClassMember,
     awardMultiplayerPoints,
@@ -24,12 +23,29 @@ const {
     listClassSessions,
     createSchool,
     getSchool,
-    findSchoolByTeacherCode,
-    rotateSchoolTeacherCode,
     getSchoolDashboard,
     getGlobalLeaderboard,
     findClassForMember,
     isClassMember,
+    createInvitations,
+    getInvitation,
+    claimInvitation,
+    listInvitations,
+    revokeInvitation,
+    listSchoolUsers,
+    createScheduleEvent,
+    listScheduleEvents,
+    cancelScheduleEvent,
+    createAssignment,
+    listAssignments,
+    setAttendance,
+    listAttendance,
+    createPrivacyRequest,
+    createMakeupRequest,
+    listSchoolRequests,
+    updateSchoolRequest,
+    auditLog,
+    listAuditLogs,
     healthCheck
 } = require('./firestore');
 
@@ -44,11 +60,13 @@ const { getAuth } = require('firebase-admin/auth');
 const firebaseApp = getApps().length ? getApp() : initializeApp();
 const firebaseAuth = getAuth(firebaseApp);
 
-// Kod dostępu dla roli nauczyciela (żeby uczeń nie awansował się sam).
+// Awaryjny kod bootstrap właściciela. Domyślnie wyłączony; produkcyjna ścieżka
+// używa jednorazowego zaproszenia tworzonego skryptem operatorskim.
 const teacherCodeFromEnv = String(process.env.TEACHER_ACCESS_CODE || '');
 const TEACHER_ACCESS_CODE = teacherCodeFromEnv.length >= 16 && !teacherCodeFromEnv.startsWith('WPISZ-')
     ? teacherCodeFromEnv
     : '';
+const ALLOW_OWNER_BOOTSTRAP = String(process.env.ALLOW_OWNER_BOOTSTRAP || '').toLowerCase() === 'true';
 if (teacherCodeFromEnv && !TEACHER_ACCESS_CODE) {
     console.warn('[config] TEACHER_ACCESS_CODE jest za krótki lub nadal ma wartość przykładową.');
 }
@@ -316,6 +334,82 @@ function sanitizeAvatar(avatar) {
     return String(avatar).trim().replace(/[<>"'`]/g, '').slice(0, 32) || 'default';
 }
 
+function normalizeContactEmail(value) {
+    const email = String(value || '').trim().toLowerCase().slice(0, 160);
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
+}
+
+function normalizePhone(value) {
+    const phone = String(value || '').trim().replace(/[^\d+]/g, '').slice(0, 20);
+    return /^\+?\d{7,15}$/.test(phone) ? phone : '';
+}
+
+function invitationHash(code) {
+    return crypto.createHash('sha256').update(sanitizeInviteCode(code)).digest('hex');
+}
+
+function generateInvitationCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = crypto.randomBytes(12);
+    let raw = '';
+    for (let i = 0; i < 12; i++) raw += alphabet[bytes[i] % alphabet.length];
+    return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8)}`;
+}
+
+function timestampIso(value) {
+    if (!value) return '';
+    if (typeof value.toDate === 'function') return value.toDate().toISOString();
+    if (value instanceof Date) return value.toISOString();
+    return String(value);
+}
+
+function publicInvitation(invite) {
+    return {
+        id: invite.id,
+        role: invite.role,
+        classId: invite.classId || '',
+        studentUid: invite.studentUid || '',
+        contactEmail: invite.contactEmail || '',
+        contactPhone: invite.contactPhone || '',
+        createdByName: invite.createdByName || '',
+        status: invite.status || 'active',
+        expiresAt: timestampIso(invite.expiresAt),
+        createdAt: timestampIso(invite.createdAt),
+        usedAt: timestampIso(invite.usedAt)
+    };
+}
+
+function dateRangesOverlap(aStart, aEnd, bStart, bEnd) {
+    return String(aStart || '') <= String(bEnd || '') && String(bStart || '') <= String(aEnd || '');
+}
+
+function timeRangesOverlap(aStart, aDuration, bStart, bDuration) {
+    return aStart < bStart + bDuration && bStart < aStart + aDuration;
+}
+
+function scheduleEventsConflict(a, b) {
+    if (!a || !b || a.status === 'cancelled' || b.status === 'cancelled') return false;
+    const sameResource = (a.classId && a.classId === b.classId)
+        || (a.teacherUid && a.teacherUid === b.teacherUid)
+        || (a.location && b.location && a.location.toLowerCase() === b.location.toLowerCase());
+    if (!sameResource) return false;
+    if (a.kind === 'once' && b.kind === 'once') {
+        return a.date === b.date && timeRangesOverlap(a.startMinutes, a.durationMinutes, b.startMinutes, b.durationMinutes);
+    }
+    if (a.kind === 'weekly' && b.kind === 'weekly') {
+        return Number(a.weekday) === Number(b.weekday)
+            && dateRangesOverlap(a.validFrom, a.validUntil, b.validFrom, b.validUntil)
+            && timeRangesOverlap(a.startMinutes, a.durationMinutes, b.startMinutes, b.durationMinutes);
+    }
+    const once = a.kind === 'once' ? a : b;
+    const weekly = a.kind === 'weekly' ? a : b;
+    if (!dateRangesOverlap(once.date, once.date, weekly.validFrom, weekly.validUntil)) return false;
+    // YYYY-MM-DD liczony w południe UTC zachowuje dzień tygodnia niezależnie od DST.
+    const weekday = new Date(`${once.date}T12:00:00Z`).getUTCDay();
+    return weekday === Number(weekly.weekday)
+        && timeRangesOverlap(once.startMinutes, once.durationMinutes, weekly.startMinutes, weekly.durationMinutes);
+}
+
 function makePlayer({ id, uid, name, avatar, role }) {
     return {
         id,          // socket.id — adresowanie połączenia w pokoju
@@ -328,24 +422,6 @@ function makePlayer({ id, uid, name, avatar, role }) {
         status: role === 'host' ? 'host' : 'ready',
         joinedAt: Date.now()
     };
-}
-
-// Unikalny kod dołączenia do klasy (wśród aktywnych klas).
-async function generateClassJoinCode() {
-    for (let i = 0; i < 10; i++) {
-        const c = generateRoomCodeRaw();
-        const existing = await findClassByJoinCode(c);
-        if (!existing) return c;
-    }
-    return generateRoomCodeRaw() + Math.floor(Math.random() * 100);
-}
-
-async function generateSchoolTeacherCode() {
-    for (let i = 0; i < 10; i++) {
-        const code = (generateRoomCodeRaw() + generateRoomCodeRaw()).slice(0, 10);
-        if (!await findSchoolByTeacherCode(code)) return code;
-    }
-    return crypto.randomBytes(8).toString('hex').toUpperCase();
 }
 
 function sortPlayersForLobby(room) {
@@ -550,7 +626,7 @@ io.on('connection', (socket) => {
     console.log(`[CONN] ${socket.id} connected`);
 
     // 1. Registration — wymaga zweryfikowanego tokenu Firebase.
-    socket.on('register', async ({ idToken, name, avatar, requestedRole, teacherCode }) => {
+    socket.on('register', async ({ idToken, name, avatar, requestedRole, teacherCode, inviteCode, contactEmail, contactPhone }) => {
         if (!checkRateLimit(socket.id, 'register', 5, 10000)) return;
 
         const decoded = await verifyIdToken(idToken);
@@ -567,54 +643,100 @@ io.on('connection', (socket) => {
         );
         const safeAvatar = sanitizeAvatar(avatar);
 
-        // Administrator zakłada szkołę kodem uruchomieniowym. Nauczyciel może wejść
-        // tylko z kodem zaproszenia konkretnej szkoły. Istniejąca rola z Firestore
-        // pozostaje autorytatywna przy kolejnych logowaniach.
+        // Przy logowaniu rola zawsze pochodzi z Firestore. Przy pierwszej rejestracji
+        // jest wyprowadzana z jednorazowego zaproszenia, nigdy z wyboru w przeglądarce.
+        // Kod uruchomieniowy pozostaje wyłącznie ścieżką bootstrap dla właściciela
+        // nowej szkoły; konta nauczycieli i uczniów nie mogą go użyć do awansu.
         let role = 'student';
         let effectiveRole = role;
         let schoolId = '';
         let schoolRole = '';
+        let isNewProfile = false;
         try {
             const existing = await getUser(uid);
-            if (existing?.role === 'school_admin' || existing?.role === 'teacher') {
-                role = existing.schoolRole === 'owner' ? 'school_admin' : existing.role;
+            if (existing) {
+                role = ['school_admin', 'teacher', 'student', 'guardian'].includes(existing.role)
+                    ? existing.role : 'student';
                 schoolId = existing.schoolId || '';
                 schoolRole = existing.schoolRole || '';
-                // Migracja właścicieli utworzonych przed wprowadzeniem jawnej roli admina.
                 if (role === 'school_admin') schoolRole = 'owner';
-                // Starsze, nieprzypisane konto nauczyciela można awansować wyłącznie
-                // kodem uruchomieniowym administratora.
-                if (!schoolId && requestedRole === 'school_admin'
-                    && TEACHER_ACCESS_CODE && teacherCode === TEACHER_ACCESS_CODE) {
+            } else {
+                isNewProfile = true;
+                const rawCode = String(inviteCode || teacherCode || '').trim();
+                const email = normalizeContactEmail(contactEmail);
+                const phone = normalizePhone(contactPhone);
+                let invitation = null;
+
+                if (email && normalizeContactEmail(decoded.email) !== email) {
+                    socket.emit('auth_error', { message: 'E-mail logowania nie zgadza się z e-mailem kontaktowym.', rollback: true });
+                    return;
+                }
+
+                if (ALLOW_OWNER_BOOTSTRAP && TEACHER_ACCESS_CODE && rawCode === TEACHER_ACCESS_CODE) {
                     role = 'school_admin';
                     schoolRole = '';
-                } else if (!schoolId && requestedRole === 'teacher' && teacherCode) {
-                    const invitedSchool = await findSchoolByTeacherCode(sanitizeInviteCode(teacherCode));
-                    if (invitedSchool) {
-                        role = 'teacher';
-                        schoolId = invitedSchool.id;
-                        schoolRole = 'teacher';
+                } else {
+                    const normalizedCode = sanitizeInviteCode(rawCode);
+                    if (!normalizedCode) {
+                        socket.emit('auth_error', { message: 'Do założenia konta potrzebny jest kod zaproszenia.', rollback: true });
+                        return;
                     }
+                    invitation = await getInvitation(invitationHash(normalizedCode));
+                    const expires = invitation?.expiresAt?.toMillis ? invitation.expiresAt.toMillis() : 0;
+                    if (!invitation || invitation.status !== 'active' || !expires || expires <= Date.now()) {
+                        socket.emit('auth_error', { message: 'Kod zaproszenia jest błędny, wykorzystany albo wygasł.', rollback: true });
+                        return;
+                    }
+                    role = invitation.role;
+                    schoolId = invitation.schoolId || '';
+                    schoolRole = role === 'teacher' ? 'teacher' : '';
+                    if (!['school_admin', 'teacher', 'student', 'guardian'].includes(role)
+                        || (role !== 'school_admin' && !schoolId)) {
+                        socket.emit('auth_error', { message: 'Zaproszenie ma nieprawidłowy zakres.', rollback: true });
+                        return;
+                    }
+                    if (invitation.contactEmail && invitation.contactEmail !== email) {
+                        socket.emit('auth_error', { message: 'Adres e-mail nie zgadza się z zaproszeniem.', rollback: true });
+                        return;
+                    }
+                    if (invitation.contactPhone && invitation.contactPhone !== phone) {
+                        socket.emit('auth_error', { message: 'Numer telefonu nie zgadza się z zaproszeniem.', rollback: true });
+                        return;
+                    }
+                    if (['school_admin', 'teacher', 'guardian'].includes(role) && !email) {
+                        socket.emit('auth_error', { message: 'Dla konta pracownika lub opiekuna wymagany jest poprawny e-mail kontaktowy.', rollback: true });
+                        return;
+                    }
+                    if (schoolId) {
+                        const school = await getSchool(schoolId);
+                        const users = await listSchoolUsers(schoolId);
+                        if (!school || school.status !== 'active' || (school.seatLimit && users.length >= school.seatLimit)) {
+                            socket.emit('auth_error', { message: 'Szkoła jest nieaktywna albo osiągnęła limit kont.', rollback: true });
+                            return;
+                        }
+                    }
+                    await claimInvitation(invitation.id, uid);
                 }
-            } else if (requestedRole === 'school_admin') {
-                if (TEACHER_ACCESS_CODE && teacherCode === TEACHER_ACCESS_CODE) {
-                    role = 'school_admin';
-                } else {
-                    socket.emit('auth_error', { message: 'Błędny kod administratora.', rollback: true });
+
+                if (['school_admin', 'teacher', 'guardian'].includes(role) && !email) {
+                    socket.emit('auth_error', { message: 'Dla konta pracownika lub opiekuna wymagany jest poprawny e-mail kontaktowy.', rollback: true });
                     return;
                 }
-            } else if (requestedRole === 'teacher') {
-                const invitedSchool = await findSchoolByTeacherCode(sanitizeInviteCode(teacherCode));
-                if (invitedSchool) {
-                    role = 'teacher';
-                    schoolId = invitedSchool.id;
-                    schoolRole = 'teacher';
-                } else {
-                    socket.emit('auth_error', { message: 'Błędny kod zaproszenia szkoły.', rollback: true });
-                    return;
+                await registerUser(uid, {
+                    name: safeName,
+                    avatar: safeAvatar,
+                    role,
+                    schoolId,
+                    schoolRole,
+                    contactEmail: email,
+                    contactPhone: phone,
+                    linkedStudentUid: invitation?.studentUid || ''
+                });
+                if (role === 'student' && invitation?.classId) {
+                    await addClassMember(invitation.classId, uid, safeName, schoolId);
                 }
+                if (schoolId) await auditLog(schoolId, uid, 'account.registered', { role });
             }
-            await registerUser(uid, { name: safeName, avatar: safeAvatar, role, schoolId, schoolRole });
             // Rola autorytatywna pochodzi z Firestore (np. nauczyciel pozostaje nauczycielem).
             const stored = await getUser(uid);
             if (stored && stored.role) {
@@ -626,7 +748,7 @@ io.on('connection', (socket) => {
             // Bez profilu z Firestore nie znamy autorytatywnej roli — cicha degradacja
             // do 'student' pokazywala nauczycielowi panel ucznia. Lepiej powiedziec wprost.
             console.error('[register] Firestore error:', e.message);
-            socket.emit('auth_error', { message: 'Serwer nie odczytał Twojego profilu — odśwież stronę.' });
+            socket.emit('auth_error', { message: 'Serwer nie mógł bezpiecznie utworzyć profilu. Poproś o nowe zaproszenie.', rollback: isNewProfile });
             return;
         }
 
@@ -636,6 +758,7 @@ io.on('connection', (socket) => {
         socket.data.accountRole = effectiveRole;
         socket.data.schoolId = schoolId;
         socket.data.schoolRole = schoolRole;
+        socket.data.emailVerified = !!decoded.email_verified;
         socket.data.roomRole = null;
         socket.emit('registered', { uid, name: safeName, avatar: safeAvatar, role: effectiveRole, schoolId, schoolRole });
     });
@@ -643,6 +766,14 @@ io.on('connection', (socket) => {
     // Gwarancja uwierzytelnienia dla akcji wymagających konta.
     function requireAuth() {
         if (!socket.uid) { socket.emit('auth_error', { message: 'Zaloguj się.' }); return false; }
+        return true;
+    }
+
+    function requireVerifiedStaff() {
+        if (['school_admin', 'teacher'].includes(socket.data.accountRole) && !socket.data.emailVerified) {
+            socket.emit('error_msg', 'Potwierdź e-mail z wiadomości Firebase, a następnie wyloguj się i zaloguj ponownie.');
+            return false;
+        }
         return true;
     }
 
@@ -665,23 +796,22 @@ io.on('connection', (socket) => {
     socket.on('create_school', async ({ name }) => {
         if (!checkRateLimit(socket.id, 'create_school', 3, 60000)) return;
         if (!requireAuth()) return;
+        if (!requireVerifiedStaff()) return;
         if (socket.data.accountRole !== 'school_admin') return socket.emit('error_msg', 'Tylko administrator może utworzyć szkołę.');
         if (socket.data.schoolId) return socket.emit('error_msg', 'Konto jest już przypisane do szkoły.');
         const schoolName = sanitizeLabel(name, 80);
         if (!schoolName) return socket.emit('error_msg', 'Podaj nazwę szkoły.');
         try {
             const schoolId = 'SCH' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
-            const teacherJoinCode = await generateSchoolTeacherCode();
             await createSchool(schoolId, {
                 name: schoolName,
                 ownerUid: socket.uid,
-                ownerName: socket.data.name,
-                teacherJoinCode
+                ownerName: socket.data.name
             });
             socket.data.schoolId = schoolId;
             socket.data.schoolRole = 'owner';
             socket.data.accountRole = 'school_admin';
-            socket.emit('school_data', { id: schoolId, name: schoolName, teacherJoinCode, plan: 'trial', status: 'active', schoolRole: 'owner' });
+            socket.emit('school_data', { id: schoolId, name: schoolName, plan: 'trial', status: 'active', schoolRole: 'owner' });
         } catch (error) {
             console.error('[create_school] error:', error.message);
             socket.emit('error_msg', 'Nie udało się utworzyć szkoły.');
@@ -697,7 +827,6 @@ io.on('connection', (socket) => {
             socket.emit('school_data', school ? {
                 id: school.id,
                 name: school.name,
-                teacherJoinCode: socket.data.schoolRole === 'owner' ? school.teacherJoinCode : '',
                 plan: school.plan || 'trial',
                 status: school.status || 'active',
                 seatLimit: school.seatLimit || 0,
@@ -705,20 +834,6 @@ io.on('connection', (socket) => {
             } : null);
         } catch (error) {
             socket.emit('error_msg', 'Nie udało się wczytać danych szkoły.');
-        }
-    });
-
-    socket.on('rotate_school_teacher_code', async () => {
-        if (!checkRateLimit(socket.id, 'rotate_school_teacher_code', 2, 60000)) return;
-        if (!requireAuth()) return;
-        if (!socket.data.schoolId || socket.data.schoolRole !== 'owner') return socket.emit('error_msg', 'Tylko właściciel szkoły może zmienić kod.');
-        try {
-            const teacherJoinCode = await generateSchoolTeacherCode();
-            await rotateSchoolTeacherCode(socket.data.schoolId, teacherJoinCode);
-            const school = await getSchool(socket.data.schoolId);
-            socket.emit('school_data', { ...school, teacherJoinCode, schoolRole: 'owner' });
-        } catch (error) {
-            socket.emit('error_msg', 'Nie udało się zmienić kodu szkoły.');
         }
     });
 
@@ -737,26 +852,355 @@ io.on('connection', (socket) => {
         }
     });
 
+    async function manageableClass(classId) {
+        const cls = await getClass(String(classId || ''));
+        if (!cls || !socket.data.schoolId || cls.schoolId !== socket.data.schoolId) return null;
+        if (socket.data.accountRole === 'school_admin' && socket.data.schoolRole === 'owner') return cls;
+        if (socket.data.accountRole === 'teacher' && cls.teacherUid === socket.uid) return cls;
+        return null;
+    }
+
+    // Jednorazowe zaproszenia. Kod jawny wraca wyłącznie w tej odpowiedzi;
+    // kolejne listowanie pokazuje metadane, bo baza zna tylko skrót kodu.
+    socket.on('create_invitations', async (payload = {}) => {
+        if (!checkRateLimit(socket.id, 'create_invitations', 5, 60000)) return;
+        if (!requireAuth() || !await requireActiveSchool()) return;
+        if (!requireVerifiedStaff()) return;
+        const role = String(payload.role || '');
+        const isOwner = socket.data.accountRole === 'school_admin' && socket.data.schoolRole === 'owner';
+        const isTeacher = socket.data.accountRole === 'teacher';
+        if ((role === 'teacher' && !isOwner) || (!['teacher', 'student', 'guardian'].includes(role)) || (!isOwner && !isTeacher)) {
+            return socket.emit('error_msg', 'Nie masz uprawnień do tworzenia takiego zaproszenia.');
+        }
+        const count = Math.max(1, Math.min(30, Number.parseInt(payload.count || '1', 10) || 1));
+        const days = Math.max(1, Math.min(30, Number.parseInt(payload.expiresDays || '7', 10) || 7));
+        const email = normalizeContactEmail(payload.contactEmail);
+        const phone = normalizePhone(payload.contactPhone);
+        if (count > 1 && (email || phone)) return socket.emit('error_msg', 'Kontakt można przypisać tylko do pojedynczego zaproszenia.');
+        let cls = null;
+        let student = null;
+        if (role === 'student' || role === 'guardian') {
+            cls = await manageableClass(payload.classId);
+            if (!cls) return socket.emit('error_msg', 'Wybierz klasę, którą możesz zarządzać.');
+        }
+        if (role === 'guardian') {
+            const studentUid = String(payload.studentUid || '');
+            if (!studentUid || !await isClassMember(cls.id, studentUid)) return socket.emit('error_msg', 'Wybierz ucznia z tej klasy.');
+            student = await getUser(studentUid);
+            if (!student) return socket.emit('error_msg', 'Nie znaleziono ucznia.');
+        }
+        try {
+            const expiresAt = new Date(Date.now() + days * 86400000);
+            const generated = [];
+            const records = [];
+            for (let i = 0; i < count; i++) {
+                const code = generateInvitationCode();
+                generated.push(code);
+                records.push({
+                    codeHash: invitationHash(code), role, schoolId: socket.data.schoolId,
+                    classId: cls?.id || '', studentUid: student?.uid || '',
+                    contactEmail: email, contactPhone: phone,
+                    createdBy: socket.uid, createdByName: socket.data.name, expiresAt
+                });
+            }
+            await createInvitations(records);
+            await auditLog(socket.data.schoolId, socket.uid, 'invitation.created', { role, count, classId: cls?.id || '' });
+            socket.emit('invitations_created', {
+                role, codes: generated, className: cls?.name || '',
+                expiresAt: expiresAt.toISOString(),
+                registrationBase: `${String(process.env.PUBLIC_APP_URL || 'https://anzan-web.ew.r.appspot.com').replace(/\/$/, '')}/?auth=register&invite=`
+            });
+            const all = await listInvitations(socket.data.schoolId);
+            socket.emit('invitations_list', { invitations: all.map(publicInvitation) });
+        } catch (error) {
+            console.error('[create_invitations] error:', error.message);
+            socket.emit('error_msg', 'Nie udało się utworzyć zaproszeń.');
+        }
+    });
+
+    socket.on('list_invitations', async () => {
+        if (!checkRateLimit(socket.id, 'list_invitations', 10, 10000)) return;
+        if (!requireAuth() || !socket.data.schoolId || !['school_admin', 'teacher'].includes(socket.data.accountRole)) return;
+        try {
+            let invitations = await listInvitations(socket.data.schoolId);
+            if (socket.data.accountRole === 'teacher') invitations = invitations.filter(item => item.createdBy === socket.uid);
+            socket.emit('invitations_list', { invitations: invitations.map(publicInvitation) });
+        } catch (error) { socket.emit('error_msg', 'Nie udało się wczytać zaproszeń.'); }
+    });
+
+    socket.on('revoke_invitation', async ({ inviteId }) => {
+        if (!checkRateLimit(socket.id, 'revoke_invitation', 10, 10000)) return;
+        if (!requireAuth() || !socket.data.schoolId || !['school_admin', 'teacher'].includes(socket.data.accountRole)) return;
+        if (!requireVerifiedStaff()) return;
+        try {
+            const invite = await getInvitation(String(inviteId || ''));
+            const allowed = invite && invite.schoolId === socket.data.schoolId
+                && (socket.data.accountRole === 'school_admin' || invite.createdBy === socket.uid);
+            if (!allowed) return socket.emit('error_msg', 'Brak dostępu do zaproszenia.');
+            await revokeInvitation(invite.id, socket.data.schoolId);
+            await auditLog(socket.data.schoolId, socket.uid, 'invitation.revoked', { role: invite.role });
+            socket.emit('info_msg', 'Zaproszenie unieważnione.');
+            socket.emit('invitations_list', { invitations: (await listInvitations(socket.data.schoolId)).map(publicInvitation) });
+        } catch (error) { socket.emit('error_msg', 'Nie udało się unieważnić zaproszenia.'); }
+    });
+
+    socket.on('request_school_operations', async () => {
+        if (!checkRateLimit(socket.id, 'request_school_operations', 10, 10000)) return;
+        if (!requireAuth() || !await requireActiveSchool()) return;
+        try {
+            const profile = await getUser(socket.uid);
+            const isOwner = socket.data.accountRole === 'school_admin' && socket.data.schoolRole === 'owner';
+            const [allEvents, allAssignments, allUsers, dashboard, school, privacyRequests, makeupRequests] = await Promise.all([
+                listScheduleEvents(socket.data.schoolId),
+                listAssignments(socket.data.schoolId),
+                listSchoolUsers(socket.data.schoolId),
+                ['school_admin', 'teacher'].includes(socket.data.accountRole)
+                    ? getSchoolDashboard(socket.data.schoolId) : Promise.resolve({ classes: [] }),
+                getSchool(socket.data.schoolId),
+                isOwner ? listSchoolRequests('privacyRequests', socket.data.schoolId) : Promise.resolve([]),
+                isOwner ? listSchoolRequests('makeupRequests', socket.data.schoolId) : Promise.resolve([])
+            ]);
+            let classId = profile?.classId || '';
+            if (socket.data.accountRole === 'guardian' && profile?.linkedStudentUid) {
+                const child = await getUser(profile.linkedStudentUid);
+                classId = child?.classId || '';
+            }
+            let events = allEvents;
+            let assignments = allAssignments;
+            if (socket.data.accountRole === 'teacher') {
+                events = events.filter(item => item.teacherUid === socket.uid);
+                assignments = assignments.filter(item => item.teacherUid === socket.uid);
+            } else if (['student', 'guardian'].includes(socket.data.accountRole)) {
+                events = events.filter(item => item.classId === classId);
+                assignments = assignments.filter(item => item.classId === classId);
+            }
+            const staff = allUsers.filter(user => ['teacher', 'school_admin'].includes(user.role)).map(user => ({
+                uid: user.uid, name: user.name, role: user.role
+            }));
+            const visibleClasses = socket.data.accountRole === 'teacher'
+                ? (dashboard.classes || []).filter(item => item.teacherUid === socket.uid)
+                : (dashboard.classes || []);
+            socket.emit('school_operations_data', {
+                role: socket.data.accountRole,
+                timezone: 'Europe/Warsaw',
+                classId,
+                classes: visibleClasses,
+                staff,
+                events,
+                assignments,
+                seatUsage: { used: allUsers.length, limit: Number(school?.seatLimit) || 0 },
+                requests: {
+                    privacy: privacyRequests.map(item => ({ ...item, createdAt: timestampIso(item.createdAt), updatedAt: timestampIso(item.updatedAt) })),
+                    makeup: makeupRequests.map(item => ({ ...item, createdAt: timestampIso(item.createdAt), updatedAt: timestampIso(item.updatedAt) }))
+                },
+                profile: {
+                    name: profile?.name || socket.data.name,
+                    contactEmail: profile?.contactEmail || '',
+                    contactPhone: profile?.contactPhone || '',
+                    linkedStudentUid: profile?.linkedStudentUid || ''
+                }
+            });
+        } catch (error) {
+            console.error('[request_school_operations] error:', error.message);
+            socket.emit('error_msg', 'Nie udało się wczytać planu szkoły.');
+        }
+    });
+
+    socket.on('update_school_request', async ({ requestType, requestId, status }) => {
+        if (!checkRateLimit(socket.id, 'update_school_request', 20, 60000) || !requireAuth()) return;
+        if (socket.data.accountRole !== 'school_admin' || socket.data.schoolRole !== 'owner') return;
+        const collectionName = requestType === 'privacy' ? 'privacyRequests'
+            : requestType === 'makeup' ? 'makeupRequests' : '';
+        const safeStatus = ['new', 'in_progress', 'resolved', 'rejected'].includes(status) ? status : '';
+        if (!collectionName || !safeStatus) return socket.emit('error_msg', 'Nieprawidłowy status wniosku.');
+        try {
+            await updateSchoolRequest(collectionName, String(requestId || ''), socket.data.schoolId, safeStatus, socket.uid);
+            await auditLog(socket.data.schoolId, socket.uid, 'request.updated', { requestType, requestId, status: safeStatus });
+            socket.emit('school_operations_changed');
+        } catch (error) { socket.emit('error_msg', 'Nie udało się zaktualizować wniosku.'); }
+    });
+
+    socket.on('create_managed_class', async ({ name, schoolYear, teacherUid }) => {
+        if (!checkRateLimit(socket.id, 'create_managed_class', 5, 60000)) return;
+        if (!requireAuth() || !await requireActiveSchool()) return;
+        if (!requireVerifiedStaff()) return;
+        if (socket.data.accountRole !== 'school_admin' || socket.data.schoolRole !== 'owner') {
+            return socket.emit('error_msg', 'Tylko właściciel szkoły może przypisać klasę nauczycielowi.');
+        }
+        const className = sanitizeLabel(name, 60);
+        const teacher = await getUser(String(teacherUid || ''));
+        if (!className || !teacher || teacher.role !== 'teacher' || teacher.schoolId !== socket.data.schoolId) {
+            return socket.emit('error_msg', 'Podaj nazwę klasy i wybierz nauczyciela z tej szkoły.');
+        }
+        try {
+            const classId = 'C' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1000);
+            await createClass(classId, {
+                name: className, teacherUid: teacher.uid, teacherName: teacher.name,
+                schoolYear: String(schoolYear || '').slice(0, 16), schoolId: socket.data.schoolId
+            });
+            await auditLog(socket.data.schoolId, socket.uid, 'class.created', { classId, teacherUid: teacher.uid });
+            socket.emit('info_msg', 'Klasa utworzona i przypisana nauczycielowi.');
+            socket.emit('school_operations_changed');
+        } catch (error) { socket.emit('error_msg', 'Nie udało się utworzyć klasy.'); }
+    });
+
+    socket.on('create_schedule_event', async (payload = {}) => {
+        if (!checkRateLimit(socket.id, 'create_schedule_event', 10, 60000)) return;
+        if (!requireAuth() || !await requireActiveSchool()) return;
+        if (!requireVerifiedStaff()) return;
+        const cls = await manageableClass(payload.classId);
+        if (!cls) return socket.emit('error_msg', 'Brak dostępu do wybranej klasy.');
+        const isOwner = socket.data.accountRole === 'school_admin';
+        const teacherUid = isOwner ? String(payload.teacherUid || cls.teacherUid || '') : socket.uid;
+        const teacher = await getUser(teacherUid);
+        if (!teacher || teacher.schoolId !== socket.data.schoolId || teacher.role !== 'teacher') {
+            return socket.emit('error_msg', 'Wybierz nauczyciela z tej szkoły.');
+        }
+        const kind = payload.kind === 'weekly' ? 'weekly' : 'once';
+        const startMinutes = Math.max(0, Math.min(1439, Number(payload.startMinutes) || 0));
+        const durationMinutes = Math.max(15, Math.min(360, Number(payload.durationMinutes) || 60));
+        const event = {
+            schoolId: socket.data.schoolId, classId: cls.id, className: cls.name,
+            teacherUid, teacherName: teacher.name || 'Nauczyciel',
+            title: sanitizeLabel(payload.title || 'Zajęcia Anzan', 80),
+            location: sanitizeLabel(payload.location, 80), kind, startMinutes, durationMinutes,
+            date: kind === 'once' ? String(payload.date || '').slice(0, 10) : '',
+            weekday: kind === 'weekly' ? Math.max(0, Math.min(6, Number(payload.weekday) || 0)) : null,
+            validFrom: kind === 'weekly' ? String(payload.validFrom || '').slice(0, 10) : '',
+            validUntil: kind === 'weekly' ? String(payload.validUntil || '').slice(0, 10) : '',
+            timezone: 'Europe/Warsaw', status: 'active', createdBy: socket.uid
+        };
+        if (!event.title || (kind === 'once' && !/^\d{4}-\d{2}-\d{2}$/.test(event.date))
+            || startMinutes + durationMinutes > 1440
+            || (kind === 'weekly' && (!/^\d{4}-\d{2}-\d{2}$/.test(event.validFrom)
+                || !/^\d{4}-\d{2}-\d{2}$/.test(event.validUntil) || event.validFrom > event.validUntil))) {
+            return socket.emit('error_msg', 'Uzupełnij poprawnie termin zajęć.');
+        }
+        try {
+            const conflicts = (await listScheduleEvents(socket.data.schoolId)).filter(item => scheduleEventsConflict(item, event));
+            if (conflicts.length) return socket.emit('schedule_conflict', { conflicts });
+            const eventId = 'EV' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+            await createScheduleEvent(eventId, event);
+            await auditLog(socket.data.schoolId, socket.uid, 'schedule.created', { eventId, classId: cls.id });
+            socket.emit('info_msg', 'Zajęcia dodane do planu.');
+            socket.emit('school_operations_changed');
+        } catch (error) { socket.emit('error_msg', 'Nie udało się zapisać zajęć.'); }
+    });
+
+    socket.on('cancel_schedule_event', async ({ eventId }) => {
+        if (!checkRateLimit(socket.id, 'cancel_schedule_event', 10, 10000)) return;
+        if (!requireAuth() || !socket.data.schoolId || !['school_admin', 'teacher'].includes(socket.data.accountRole)) return;
+        if (!requireVerifiedStaff()) return;
+        try {
+            const event = (await listScheduleEvents(socket.data.schoolId)).find(item => item.id === eventId);
+            if (!event || (socket.data.accountRole === 'teacher' && event.teacherUid !== socket.uid)) return socket.emit('error_msg', 'Brak dostępu do zajęć.');
+            await cancelScheduleEvent(eventId, socket.data.schoolId, socket.uid);
+            await auditLog(socket.data.schoolId, socket.uid, 'schedule.cancelled', { eventId });
+            socket.emit('school_operations_changed');
+        } catch (error) { socket.emit('error_msg', 'Nie udało się odwołać zajęć.'); }
+    });
+
+    socket.on('create_assignment', async (payload = {}) => {
+        if (!checkRateLimit(socket.id, 'create_assignment', 10, 60000)) return;
+        if (!requireAuth() || socket.data.accountRole !== 'teacher' || !await requireActiveSchool()) return;
+        if (!requireVerifiedStaff()) return;
+        const cls = await manageableClass(payload.classId);
+        if (!cls) return socket.emit('error_msg', 'Brak dostępu do klasy.');
+        const title = sanitizeLabel(payload.title, 100);
+        if (!title) return socket.emit('error_msg', 'Podaj tytuł zadania.');
+        try {
+            const assignmentId = 'AS' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+            await createAssignment(assignmentId, {
+                schoolId: socket.data.schoolId, classId: cls.id, className: cls.name,
+                teacherUid: socket.uid, teacherName: socket.data.name, title,
+                description: sanitizeLabel(payload.description, 500),
+                dueDate: String(payload.dueDate || '').slice(0, 10),
+                trainingKey: sanitizeLabel(payload.trainingKey, 80)
+            });
+            await auditLog(socket.data.schoolId, socket.uid, 'assignment.created', { assignmentId, classId: cls.id });
+            socket.emit('info_msg', 'Zadanie opublikowane.');
+            socket.emit('school_operations_changed');
+        } catch (error) { socket.emit('error_msg', 'Nie udało się zapisać zadania.'); }
+    });
+
+    socket.on('save_attendance', async ({ eventId, occurrenceDate, entries }) => {
+        if (!checkRateLimit(socket.id, 'save_attendance', 10, 60000)) return;
+        if (!requireAuth() || !['school_admin', 'teacher'].includes(socket.data.accountRole)) return;
+        if (!requireVerifiedStaff()) return;
+        const event = (await listScheduleEvents(socket.data.schoolId)).find(item => item.id === eventId);
+        if (!event || (socket.data.accountRole === 'teacher' && event.teacherUid !== socket.uid)) return socket.emit('error_msg', 'Brak dostępu do listy obecności.');
+        const safeEntries = Array.isArray(entries) ? entries.slice(0, 100).map(entry => ({
+            uid: String(entry.uid || ''), name: sanitizeName(entry.name),
+            status: ['present', 'absent', 'late', 'excused'].includes(entry.status) ? entry.status : 'present'
+        })).filter(entry => entry.uid) : [];
+        try {
+            await setAttendance(eventId, String(occurrenceDate || '').slice(0, 10), safeEntries, socket.uid);
+            await auditLog(socket.data.schoolId, socket.uid, 'attendance.saved', { eventId, count: safeEntries.length });
+            socket.emit('info_msg', 'Obecność zapisana.');
+        } catch (error) { socket.emit('error_msg', 'Nie udało się zapisać obecności.'); }
+    });
+
+    socket.on('request_attendance', async ({ eventId, occurrenceDate }) => {
+        if (!requireAuth() || !['school_admin', 'teacher'].includes(socket.data.accountRole)) return;
+        const event = (await listScheduleEvents(socket.data.schoolId)).find(item => item.id === eventId);
+        if (!event || (socket.data.accountRole === 'teacher' && event.teacherUid !== socket.uid)) return;
+        const [members, attendance] = await Promise.all([
+            getClassLeaderboard(event.classId, 100), listAttendance(eventId, String(occurrenceDate || '').slice(0, 10))
+        ]);
+        socket.emit('attendance_data', { eventId, occurrenceDate, members, attendance });
+    });
+
+    socket.on('create_privacy_request', async ({ type }) => {
+        if (!checkRateLimit(socket.id, 'create_privacy_request', 3, 86400000) || !requireAuth()) return;
+        const requestType = ['export', 'delete', 'correct'].includes(type) ? type : 'export';
+        try {
+            const requestId = 'PR' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+            await createPrivacyRequest(requestId, { uid: socket.uid, schoolId: socket.data.schoolId || '', type: requestType });
+            if (socket.data.schoolId) await auditLog(socket.data.schoolId, socket.uid, 'privacy.requested', { type: requestType });
+            socket.emit('info_msg', 'Wniosek został zapisany. Administrator szkoły go zweryfikuje.');
+        } catch (error) { socket.emit('error_msg', 'Nie udało się zapisać wniosku.'); }
+    });
+
+    socket.on('create_makeup_request', async ({ eventId, preferredDate, note }) => {
+        if (!checkRateLimit(socket.id, 'create_makeup_request', 5, 86400000) || !requireAuth()) return;
+        if (!['student', 'guardian'].includes(socket.data.accountRole)) return socket.emit('error_msg', 'Ta funkcja jest przeznaczona dla ucznia lub opiekuna.');
+        try {
+            const requestId = 'MR' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+            await createMakeupRequest(requestId, {
+                uid: socket.uid, schoolId: socket.data.schoolId, eventId: String(eventId || ''),
+                preferredDate: String(preferredDate || '').slice(0, 10), note: sanitizeLabel(note, 300)
+            });
+            socket.emit('info_msg', 'Prośba o odrobienie zajęć została wysłana.');
+        } catch (error) { socket.emit('error_msg', 'Nie udało się wysłać prośby.'); }
+    });
+
+    socket.on('request_audit_logs', async () => {
+        if (!requireAuth() || socket.data.accountRole !== 'school_admin' || socket.data.schoolRole !== 'owner') return;
+        try {
+            const logs = await listAuditLogs(socket.data.schoolId, 100);
+            socket.emit('audit_logs', { logs: logs.map(item => ({ ...item, createdAt: timestampIso(item.createdAt) })) });
+        } catch (error) { socket.emit('error_msg', 'Nie udało się wczytać dziennika audytowego.'); }
+    });
+
     // 1b. Klasy (grupy / rok szkolny)
     socket.on('create_class', async ({ name, schoolYear }) => {
         if (!checkRateLimit(socket.id, 'create_class', 5, 10000)) return;
         if (!requireAuth()) return;
+        if (!requireVerifiedStaff()) return;
         if (socket.data.accountRole !== 'teacher') return socket.emit('error_msg', 'Tylko nauczyciel może tworzyć klasy.');
         if (!await requireActiveSchool()) return;
         const className = sanitizeLabel(name, 60);
         if (!className) return socket.emit('error_msg', 'Podaj nazwę klasy.');
         try {
             const classId = 'C' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1000);
-            const joinCode = await generateClassJoinCode();
             await createClass(classId, {
                 name: className,
                 teacherUid: socket.uid,
                 teacherName: socket.data.name,
                 schoolYear: String(schoolYear || '').slice(0, 16),
-                joinCode,
                 schoolId: socket.data.schoolId || ''
             });
-            socket.emit('class_created', { classId, joinCode, name: className, schoolYear });
+            socket.emit('class_created', { classId, name: className, schoolYear });
         } catch (e) {
             console.error('[create_class] error:', e.message);
             socket.emit('error_msg', 'Nie udało się utworzyć klasy.');
@@ -773,22 +1217,6 @@ io.on('connection', (socket) => {
             socket.emit('classes_list', { classes });
         } catch (e) {
             socket.emit('classes_list', { classes: [] });
-        }
-    });
-
-    socket.on('join_class', async ({ joinCode }) => {
-        if (!checkRateLimit(socket.id, 'join_class', 5, 10000)) return;
-        if (!requireAuth()) return;
-        if (socket.data.accountRole !== 'student') return socket.emit('error_msg', 'Tylko konto ucznia może dołączyć do klasy.');
-        try {
-            const cls = await findClassByJoinCode(sanitizeRoomCode(joinCode));
-            if (!cls) return socket.emit('error_msg', 'Nie znaleziono klasy o tym kodzie.');
-            await addClassMember(cls.id, socket.uid, socket.data.name, cls.schoolId);
-            socket.data.schoolId = cls.schoolId || socket.data.schoolId || '';
-            socket.emit('class_joined', { classId: cls.id, name: cls.name, schoolYear: cls.schoolYear });
-        } catch (e) {
-            console.error('[join_class] error:', e.message);
-            socket.emit('error_msg', 'Nie udało się dołączyć do klasy.');
         }
     });
 
@@ -849,6 +1277,7 @@ io.on('connection', (socket) => {
     socket.on('remove_class_member', async ({ classId, uid }) => {
         if (!checkRateLimit(socket.id, 'remove_class_member', 20, 10000)) return;
         if (!requireAuth()) return;
+        if (!requireVerifiedStaff()) return;
         if (!await ownsClass(classId)) return socket.emit('error_msg', 'Brak dostępu do tej klasy.');
         try {
             await removeClassMember(String(classId), String(uid || ''));
@@ -863,6 +1292,7 @@ io.on('connection', (socket) => {
     socket.on('reset_member_password', async ({ classId, uid }) => {
         if (!checkRateLimit(socket.id, 'reset_member_password', 10, 10000)) return;
         if (!requireAuth()) return;
+        if (!requireVerifiedStaff()) return;
         if (!await ownsClass(classId)) return socket.emit('error_msg', 'Brak dostępu do tej klasy.');
         try {
             if (!await isClassMember(String(classId), String(uid || ''))) {
@@ -887,6 +1317,7 @@ io.on('connection', (socket) => {
     socket.on('close_class', async ({ classId }) => {
         if (!checkRateLimit(socket.id, 'close_class', 10, 10000)) return;
         if (!requireAuth()) return;
+        if (!requireVerifiedStaff()) return;
         if (!await ownsClass(classId)) return socket.emit('error_msg', 'Brak dostępu do tej klasy.');
         try {
             await setClassActive(String(classId), false);
@@ -915,6 +1346,7 @@ io.on('connection', (socket) => {
     socket.on('create_room', async ({ config, mode, classId }) => {
         if (!checkRateLimit(socket.id, 'create_room', 3, 10000)) return;
         if (!requireAuth()) return;
+        if (!requireVerifiedStaff()) return;
         if (socket.data.accountRole !== 'teacher') return socket.emit('error_msg', 'Tylko nauczyciel może tworzyć pokój.');
         if (!await requireActiveSchool()) return;
 

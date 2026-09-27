@@ -1,8 +1,9 @@
 // auth.js
 // =====================================================================
 // Warstwa logowania (Firebase Authentication, SDK compat z CDN).
-// Uczeń rejestruje się sam „na nazwę + hasło" (mapowane na syntetyczny e-mail).
-// Nauczyciel podaje dodatkowo kod dostępu (weryfikowany po stronie serwera).
+// Każde nowe konto wymaga jednorazowego zaproszenia weryfikowanego przez serwer.
+// Konto z kontaktem e-mail używa go w Firebase; uczeń bez e-maila dostaje
+// techniczny adres utworzony z nazwy użytkownika.
 // Po zalogowaniu udostępnia ID token, którym serwer potwierdza tożsamość.
 // =====================================================================
 
@@ -18,7 +19,9 @@
 
         // Zamiana nazwy użytkownika na poprawny format e-mail dla Firebase.
         _emailFor: function (username) {
-            const u = String(username || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+            const raw = String(username || '').trim().toLowerCase();
+            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return raw;
+            const u = raw.replace(/[^a-z0-9._-]/g, '');
             return u + '@' + (window.ANZAN_USER_EMAIL_DOMAIN || 'students.anzan.local');
         },
 
@@ -62,17 +65,20 @@
             try { return await this._fbUser.getIdToken(); } catch (e) { return null; }
         },
 
-        register: async function (username, password, role, teacherCode) {
-            const email = this._emailFor(username);
+        register: async function (username, password, inviteCode, contactEmail, contactPhone) {
+            const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(contactEmail || '').trim())
+                ? String(contactEmail).trim().toLowerCase()
+                : this._emailFor(username);
             this._suppressAutoRegister = true;
             try {
                 const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
                 await cred.user.updateProfile({ displayName: username });
                 this._fbUser = cred.user;
                 this.user = { uid: cred.user.uid, name: username };
-                this._pendingRole = role;
-                this._pendingTeacherCode = teacherCode;
-                this._rememberRole(role);
+                this._pendingRole = '';
+                this._pendingTeacherCode = inviteCode;
+                this._pendingContactEmail = contactEmail;
+                this._pendingContactPhone = contactPhone;
                 this._createdForRegistration = true;
                 app.ui && app.ui.toast && app.ui.toast('Weryfikuję uprawnienia konta…', 'info');
                 this._suppressAutoRegister = false;
@@ -90,6 +96,8 @@
             // istniejącego profilu w Firestore i traktuje jako autorytatywną.
             this._pendingRole = '';
             this._pendingTeacherCode = '';
+            this._pendingContactEmail = '';
+            this._pendingContactPhone = '';
             try {
                 await firebase.auth().signInWithEmailAndPassword(email, password);
             } catch (e) {
@@ -108,6 +116,12 @@
         confirmRegistration: function () {
             if (this._createdForRegistration && app.ui && app.ui.toast) {
                 app.ui.toast('Konto utworzone i aktywowane!', 'success');
+                const email = String(this._fbUser && this._fbUser.email || '');
+                if (email && !email.endsWith('.anzan.local') && !this._fbUser.emailVerified) {
+                    this._fbUser.sendEmailVerification().then(() => {
+                        app.ui.toast('Wysłaliśmy też wiadomość potwierdzającą e-mail.', 'info');
+                    }).catch(() => { /* odzyskiwanie hasła nadal pozostaje dostępne */ });
+                }
             }
             this._createdForRegistration = false;
         },
@@ -123,7 +137,8 @@
 
         _friendly: function (e) {
             const c = e && e.code || '';
-            if (c.includes('email-already-in-use')) return 'nazwa jest już zajęta.';
+            if (c.includes('email-already-in-use')) return 'nazwa lub e-mail są już zajęte.';
+            if (c.includes('invalid-email')) return 'adres e-mail jest nieprawidłowy.';
             if (c.includes('weak-password')) return 'hasło za krótkie (min. 6 znaków).';
             if (c.includes('wrong-password') || c.includes('invalid-credential')) return 'błędna nazwa lub hasło.';
             if (c.includes('user-not-found')) return 'nie ma takiego konta.';
@@ -143,12 +158,15 @@
             const role = this._pendingRole || this._recallRole();
             // Połącz i zarejestruj się na serwerze gier z tokenem + rolą.
             if (app.multi && typeof app.multi.authenticate === 'function') {
-                app.multi.authenticate(role, this._pendingTeacherCode);
+                app.multi.authenticate(role, this._pendingTeacherCode, {
+                    contactEmail: this._pendingContactEmail || '',
+                    contactPhone: this._pendingContactPhone || ''
+                });
             }
         },
 
         _rememberRole: function (role) {
-            const safeRole = ['student', 'teacher', 'school_admin'].includes(role) ? role : 'student';
+            const safeRole = ['student', 'teacher', 'school_admin', 'guardian'].includes(role) ? role : 'student';
             try { localStorage.setItem(ROLE_INTENT_KEY, safeRole); }
             catch (e) { /* ignore */ }
         },
@@ -189,12 +207,29 @@
             return;
         }
         if (mode === 'register') {
-            const role = document.getElementById('auth-role').value;
-            const teacherCode = document.getElementById('auth-teacher-code').value;
-            auth.register(username, password, role, teacherCode).catch(() => { });
+            const inviteCode = document.getElementById('auth-teacher-code').value.trim();
+            const contactEmail = document.getElementById('auth-contact-email').value.trim();
+            const contactPhone = document.getElementById('auth-contact-phone').value.trim();
+            if (!inviteCode) {
+                app.ui && app.ui.toast && app.ui.toast('Podaj kod zaproszenia.', 'warning');
+                return;
+            }
+            auth.register(username, password, inviteCode, contactEmail, contactPhone).catch(() => { });
         } else {
             auth.login(username, password).catch(() => { });
         }
+    };
+
+    window.authResetPassword = function () {
+        const identifier = document.getElementById('auth-username').value.trim();
+        if (!identifier) return app.ui.toast('Podaj e-mail konta.', 'warning');
+        if (!identifier.includes('@')) return app.ui.toast('Konto bez e-maila resetuje nauczyciel lub administrator szkoły.', 'info');
+        firebase.auth().sendPasswordResetEmail(auth._emailFor(identifier))
+            .then(() => app.ui.toast('Jeśli konto istnieje, wiadomość do zmiany hasła została wysłana.', 'success'))
+            .catch((error) => {
+                if (String(error && error.code || '').includes('network')) app.ui.toast('Brak połączenia. Spróbuj ponownie.', 'error');
+                else app.ui.toast('Jeśli konto istnieje, wiadomość do zmiany hasła została wysłana.', 'success');
+            });
     };
 
     window.authSetMode = function (mode) {
@@ -207,33 +242,24 @@
         const title = document.getElementById('auth-heading-title');
         const subtitle = document.getElementById('auth-heading-subtitle');
         const password = document.getElementById('auth-password');
+        const reset = document.getElementById('auth-reset-action');
         if (fields) fields.style.display = registering ? 'block' : 'none';
         if (loginActions) loginActions.style.display = registering ? 'none' : 'grid';
         if (registerActions) registerActions.style.display = registering ? 'grid' : 'none';
         if (kicker) kicker.innerText = registering ? 'NOWE KONTO' : 'WITAJ PONOWNIE';
         if (title) title.innerText = registering ? 'Dołącz do swojej szkoły' : 'Wejdź do swojej szkoły';
         if (subtitle) subtitle.innerText = registering
-            ? 'Wybierz rolę. Kod jest wymagany tylko dla pracowników szkoły.'
+            ? 'Wpisz jednorazowy kod — rola, szkoła i klasa zostaną przypisane automatycznie.'
             : 'Podaj nazwę użytkownika i hasło.';
         if (password) password.autocomplete = registering ? 'new-password' : 'current-password';
-        if (registering) window.authToggleRole();
-        else {
+        if (reset) reset.style.display = registering ? 'none' : 'block';
+        if (!registering) {
             const code = document.getElementById('auth-teacher-code');
             if (code) code.value = '';
         }
     };
 
-    window.authToggleRole = function () {
-        const role = document.getElementById('auth-role').value;
-        const tc = document.getElementById('auth-teacher-code-row');
-        const label = document.getElementById('auth-code-label');
-        const input = document.getElementById('auth-teacher-code');
-        if (tc) tc.style.display = role === 'student' ? 'none' : 'block';
-        if (label) label.innerText = role === 'school_admin' ? 'Kod administratora' : 'Kod zaproszenia szkoły';
-        if (input) input.placeholder = role === 'school_admin' ? 'kod uruchomieniowy platformy' : 'kod od administratora szkoły';
-    };
-
-    ['auth-username', 'auth-password', 'auth-teacher-code'].forEach((id) => {
+    ['auth-username', 'auth-password', 'auth-teacher-code', 'auth-contact-email', 'auth-contact-phone'].forEach((id) => {
         const element = document.getElementById(id);
         if (element) element.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') window.authSubmit(auth._formMode || 'login');
@@ -245,6 +271,9 @@
     try {
         if (new URLSearchParams(window.location.search).get('auth') === 'register') {
             window.authSetMode('register');
+            const invite = new URLSearchParams(window.location.search).get('invite');
+            const input = document.getElementById('auth-teacher-code');
+            if (invite && input) input.value = invite;
         }
     } catch (e) { /* starsza przeglądarka — pozostaje ekran logowania */ }
 })();

@@ -2,10 +2,11 @@ runtime: nodejs22
 env: standard
 instance_class: F1
 
-# Skopiuj ten plik do app.deploy.yaml (ignorowany przez Git) i ustaw silny,
-# unikalny kod. Po ujawnieniu kod należy natychmiast zmienić.
+# Skopiuj ten plik do app.deploy.yaml (ignorowany przez Git).
 env_variables:
-  TEACHER_ACCESS_CODE: "WPISZ-TUTAJ-DLUGI-LOSOWY-KOD"
+  PUBLIC_APP_URL: "https://anzan-web.ew.r.appspot.com"
+  # Tylko awaryjny bootstrap. Normalnie ownera zaprasza npm run invite:owner.
+  ALLOW_OWNER_BOOTSTRAP: "false"
 
 automatic_scaling:
   min_instances: 0

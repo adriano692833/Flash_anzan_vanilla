@@ -1,9 +1,9 @@
-const CACHE_NAME = 'flash-anzan-school-6.6';
+const CACHE_NAME = 'flash-anzan-school-7.0';
 const APP_SHELL = [
   '/', '/index.html', '/manifest.webmanifest', '/icons/anzan-pro.svg',
   '/css/app.css', '/css/mobile.css', '/js/firebase-config.js', '/js/config.js',
   '/js/soroban-generator.js', '/js/app.js', '/js/ui.js', '/js/auth.js',
-  '/js/multiplayer.js', '/js/main.js'
+  '/js/multiplayer.js', '/js/school-operations.js', '/js/main.js'
 ];
 
 self.addEventListener('install', event => {

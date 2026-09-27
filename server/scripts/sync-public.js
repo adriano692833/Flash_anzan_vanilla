@@ -17,6 +17,7 @@ const files = [
     'js/ui.js',
     'js/auth.js',
     'js/multiplayer.js',
+    'js/school-operations.js',
     'js/main.js',
     'js/config.js',
     'js/firebase-config.js',

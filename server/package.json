@@ -1,6 +1,6 @@
 {
   "name": "anzan-server",
-  "version": "6.6.0",
+  "version": "7.0.0",
   "description": "Flash Anzan — low-cost platform for soroban and mental arithmetic schools",
   "main": "server.js",
   "scripts": {
@@ -9,7 +9,8 @@
     "check:sync": "node scripts/sync-public.js --check",
     "test": "node soroban-generator.selftest.js && node scripts/runtime-selftest.js && node scripts/sync-public.js --check && node scripts/smoke-test.js",
     "test:smoke": "node scripts/smoke-test.js",
-    "school:license": "node scripts/school-license.js"
+    "school:license": "node scripts/school-license.js",
+    "invite:owner": "node scripts/create-owner-invite.js"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.2.0",
