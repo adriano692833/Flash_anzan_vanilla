@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flash-anzan-school-6.5';
+const CACHE_NAME = 'flash-anzan-school-6.6';
 const APP_SHELL = [
   '/', '/index.html', '/manifest.webmanifest', '/icons/anzan-pro.svg',
   '/css/app.css', '/css/mobile.css', '/js/firebase-config.js', '/js/config.js',
@@ -22,9 +22,11 @@ self.addEventListener('fetch', event => {
     event.respondWith(fetch(event.request).catch(() => caches.match('/index.html')));
     return;
   }
-  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+  // Zasoby aplikacji są network-first: po wdrożeniu użytkownik od razu dostaje
+  // aktualny formularz i logikę. Cache pozostaje bezpiecznym fallbackiem offline.
+  event.respondWith(fetch(event.request).then(response => {
     const copy = response.clone();
     caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
     return response;
-  })));
+  }).catch(() => caches.match(event.request)));
 });

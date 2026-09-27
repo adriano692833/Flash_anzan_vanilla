@@ -239,4 +239,12 @@
             if (event.key === 'Enter') window.authSubmit(auth._formMode || 'login');
         });
     });
+
+    // Stabilny link do formularza rejestracji. Przyda się również jako punkt
+    // docelowy przyszłych, jednorazowych zaproszeń właściciela szkoły.
+    try {
+        if (new URLSearchParams(window.location.search).get('auth') === 'register') {
+            window.authSetMode('register');
+        }
+    } catch (e) { /* starsza przeglądarka — pozostaje ekran logowania */ }
 })();
