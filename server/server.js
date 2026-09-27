@@ -54,7 +54,8 @@ if (teacherCodeFromEnv && !TEACHER_ACCESS_CODE) {
 async function verifyIdToken(idToken) {
     if (!idToken || typeof idToken !== 'string') return null;
     try {
-        return await firebaseAuth.verifyIdToken(idToken);
+        // checkRevoked=true odrzuca również tokeny usuniętych/zablokowanych kont.
+        return await firebaseAuth.verifyIdToken(idToken, true);
     } catch (e) {
         console.warn('[auth] verifyIdToken failed:', e.message);
         return null;

@@ -1,6 +1,6 @@
 {
   "name": "anzan-server",
-  "version": "6.1.1",
+  "version": "6.1.2",
   "description": "Anzan School Pro — low-cost platform for mental arithmetic schools",
   "main": "server.js",
   "scripts": {
