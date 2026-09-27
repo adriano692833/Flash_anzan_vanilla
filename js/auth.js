@@ -84,11 +84,12 @@
             }
         },
 
-        login: async function (username, password, role, teacherCode) {
+        login: async function (username, password) {
             const email = this._emailFor(username);
-            this._pendingRole = role;
-            this._pendingTeacherCode = teacherCode;
-            this._rememberRole(role);
+            // Rola nie jest wybierana podczas logowania. Serwer odczytuje ją z
+            // istniejącego profilu w Firestore i traktuje jako autorytatywną.
+            this._pendingRole = '';
+            this._pendingTeacherCode = '';
             try {
                 await firebase.auth().signInWithEmailAndPassword(email, password);
             } catch (e) {
@@ -164,7 +165,8 @@
         _toggleAuthUI: function (loggedIn) {
             const gate = document.getElementById('login-gate');
             const shell = document.querySelector('.app-container');
-            if (gate) gate.style.display = loggedIn ? 'none' : 'flex';
+            // Pusty display przywraca układ CSS: grid na desktopie i block na telefonie.
+            if (gate) gate.style.display = loggedIn ? 'none' : '';
             if (shell) shell.classList.toggle('is-locked', !loggedIn);
 
             const nameEl = document.getElementById('side-user-name');
@@ -182,14 +184,43 @@
     window.authSubmit = function (mode) {
         const username = document.getElementById('auth-username').value.trim();
         const password = document.getElementById('auth-password').value;
-        const role = document.getElementById('auth-role').value;
-        const teacherCode = document.getElementById('auth-teacher-code').value;
         if (!username || !password) {
             app.ui && app.ui.toast && app.ui.toast('Podaj nazwę i hasło.', 'warning');
             return;
         }
-        if (mode === 'register') auth.register(username, password, role, teacherCode).catch(() => { });
-        else auth.login(username, password, role, teacherCode).catch(() => { });
+        if (mode === 'register') {
+            const role = document.getElementById('auth-role').value;
+            const teacherCode = document.getElementById('auth-teacher-code').value;
+            auth.register(username, password, role, teacherCode).catch(() => { });
+        } else {
+            auth.login(username, password).catch(() => { });
+        }
+    };
+
+    window.authSetMode = function (mode) {
+        const registering = mode === 'register';
+        auth._formMode = registering ? 'register' : 'login';
+        const fields = document.getElementById('auth-registration-fields');
+        const loginActions = document.getElementById('auth-login-actions');
+        const registerActions = document.getElementById('auth-register-actions');
+        const kicker = document.getElementById('auth-heading-kicker');
+        const title = document.getElementById('auth-heading-title');
+        const subtitle = document.getElementById('auth-heading-subtitle');
+        const password = document.getElementById('auth-password');
+        if (fields) fields.style.display = registering ? 'block' : 'none';
+        if (loginActions) loginActions.style.display = registering ? 'none' : 'grid';
+        if (registerActions) registerActions.style.display = registering ? 'grid' : 'none';
+        if (kicker) kicker.innerText = registering ? 'NOWE KONTO' : 'WITAJ PONOWNIE';
+        if (title) title.innerText = registering ? 'Dołącz do swojej szkoły' : 'Wejdź do swojej szkoły';
+        if (subtitle) subtitle.innerText = registering
+            ? 'Wybierz rolę. Kod jest wymagany tylko dla pracowników szkoły.'
+            : 'Podaj nazwę użytkownika i hasło.';
+        if (password) password.autocomplete = registering ? 'new-password' : 'current-password';
+        if (registering) window.authToggleRole();
+        else {
+            const code = document.getElementById('auth-teacher-code');
+            if (code) code.value = '';
+        }
     };
 
     window.authToggleRole = function () {
@@ -201,4 +232,11 @@
         if (label) label.innerText = role === 'school_admin' ? 'Kod administratora' : 'Kod zaproszenia szkoły';
         if (input) input.placeholder = role === 'school_admin' ? 'kod uruchomieniowy platformy' : 'kod od administratora szkoły';
     };
+
+    ['auth-username', 'auth-password', 'auth-teacher-code'].forEach((id) => {
+        const element = document.getElementById(id);
+        if (element) element.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') window.authSubmit(auth._formMode || 'login');
+        });
+    });
 })();

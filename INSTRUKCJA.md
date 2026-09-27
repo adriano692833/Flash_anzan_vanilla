@@ -18,8 +18,8 @@ Zapisane profile są synchronizowane z kontem i pojawiają się w odpowiednich e
 
 ### 1. Załóż konto
 1. Wejdź na stronę → zakładka **🌐 Multiplayer**.
-2. Wpisz **nazwę** i **hasło** (min. 6 znaków).
-3. Pierwsza osoba wybiera **Administrator szkoły** i wpisuje kod uruchomieniowy platformy.
+2. Kliknij **Załóż konto**, a następnie wpisz **nazwę** i **hasło** (min. 6 znaków).
+3. W formularzu rejestracji pierwsza osoba wybiera **Administrator szkoły** i wpisuje kod uruchomieniowy platformy.
    Nauczyciel wybiera rolę **Nauczyciel** i używa kodu zaproszenia otrzymanego od administratora szkoły.
 4. Kliknij **Załóż konto** (następnym razem **Zaloguj**).
 
@@ -56,7 +56,7 @@ Zapisane profile są synchronizowane z kontem i pojawiają się w odpowiednich e
 
 ### 1. Załóż konto
 1. Wejdź na stronę → zakładka **🌐 Multiplayer**.
-2. Wpisz **nazwę** i **hasło**, rola: **Uczeń** → **Załóż konto** (potem **Zaloguj**).
+2. Kliknij **Załóż konto**, wpisz **nazwę** i **hasło**, a następnie wybierz rolę **Uczeń**.
 3. Zapamiętaj nazwę i hasło — będziesz się nimi logować na każdych zajęciach (na dowolnym urządzeniu).
    Jeśli zapomnisz hasła — poproś nauczyciela o reset.
 

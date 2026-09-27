@@ -29,6 +29,10 @@
         max-width: none;
     }
 
+    .auth-actions {
+        grid-template-columns: 1fr;
+    }
+
     .app-container {
         grid-template-columns: 1fr;
         display: block;

@@ -541,6 +541,21 @@ input[type=number] {
     color: var(--text-muted);
 }
 
+.auth-registration-fields {
+    margin: 0.1rem 0 1rem;
+    padding: 1rem;
+    border: 1px solid rgba(215, 169, 75, 0.18);
+    border-radius: var(--radius-sm);
+    background: rgba(7, 20, 38, 0.34);
+    animation: fadeIn 0.2s ease-out;
+}
+
+.auth-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
 .dashboard-hero {
     position: relative;
     min-height: 290px;

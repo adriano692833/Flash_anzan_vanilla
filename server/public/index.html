@@ -47,9 +47,9 @@
         </section>
         <div class="login-card glass-card">
             <div class="login-heading">
-                <span class="login-heading-kicker">WITAJ PONOWNIE</span>
-                <h2>Wejdź do swojej szkoły</h2>
-                <p>Soroban i matematyka mentalna w jednym miejscu.</p>
+                <span id="auth-heading-kicker" class="login-heading-kicker">WITAJ PONOWNIE</span>
+                <h2 id="auth-heading-title">Wejdź do swojej szkoły</h2>
+                <p id="auth-heading-subtitle">Podaj nazwę użytkownika i hasło.</p>
             </div>
             <label class="stat-label">Nazwa użytkownika</label>
             <input type="text" id="auth-username" class="input-lg" placeholder="np. ania2016"
@@ -57,19 +57,25 @@
             <label class="stat-label">Hasło</label>
             <input type="password" id="auth-password" class="input-lg" placeholder="min. 6 znaków"
                 style="margin-bottom: 1rem;" autocomplete="current-password">
-            <label class="stat-label">Rola</label>
-            <select id="auth-role" class="input-lg" style="margin-bottom: 1rem;" onchange="authToggleRole()">
-                <option value="student">🎓 Uczeń</option>
-                <option value="teacher">👨‍🏫 Nauczyciel</option>
-                <option value="school_admin">🛡️ Administrator szkoły</option>
-            </select>
-            <div id="auth-teacher-code-row" style="display:none; margin-bottom: 1rem;">
-                <label id="auth-code-label" class="stat-label">Kod zaproszenia szkoły</label>
-                <input type="password" id="auth-teacher-code" class="input-lg" placeholder="kod od administratora szkoły">
+            <div id="auth-registration-fields" class="auth-registration-fields" style="display:none;">
+                <label class="stat-label">Kim jesteś?</label>
+                <select id="auth-role" class="input-lg" style="margin-bottom: 1rem;" onchange="authToggleRole()">
+                    <option value="student">🎓 Uczeń</option>
+                    <option value="teacher">👨‍🏫 Nauczyciel</option>
+                    <option value="school_admin">🛡️ Administrator szkoły</option>
+                </select>
+                <div id="auth-teacher-code-row" style="display:none; margin-bottom: 1rem;">
+                    <label id="auth-code-label" class="stat-label">Kod zaproszenia szkoły</label>
+                    <input type="password" id="auth-teacher-code" class="input-lg" placeholder="kod od administratora szkoły">
+                </div>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+            <div id="auth-login-actions" class="auth-actions">
                 <button class="btn btn-primary" onclick="authSubmit('login')">Zaloguj</button>
-                <button class="btn btn-secondary" onclick="authSubmit('register')">Załóż konto</button>
+                <button class="btn btn-secondary" onclick="authSetMode('register')">Załóż konto</button>
+            </div>
+            <div id="auth-register-actions" class="auth-actions" style="display:none;">
+                <button class="btn btn-primary" onclick="authSubmit('register')">Załóż konto</button>
+                <button class="btn btn-secondary" onclick="authSetMode('login')">Wróć do logowania</button>
             </div>
             <p style="color:var(--text-muted); font-size:0.85rem; margin-top:1rem; text-align:center;">
                 Konto trzyma Twoje punkty, serię i historię — dzięki temu postęp jest ten sam

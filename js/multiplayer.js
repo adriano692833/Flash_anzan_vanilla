@@ -110,6 +110,8 @@
 
             s.on('registered', (d) => {
                 this.myRole = d.role;
+                this.pendingRole = d.role;
+                if (app.auth && typeof app.auth._rememberRole === 'function') app.auth._rememberRole(d.role);
                 this.myUid = d.uid;
                 this.schoolId = d.schoolId || '';
                 this.schoolRole = d.schoolRole || '';
