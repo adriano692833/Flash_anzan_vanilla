@@ -44,6 +44,8 @@ bootstrap działa tylko przy świadomej fladze `ALLOW_OWNER_BOOTSTRAP=true`.
 ## Bezpieczeństwo
 
 - Token Firebase jest weryfikowany z `checkRevoked=true`.
+- Login jest unikalnym aliasem przechowywanym jako skrót SHA-256. Logowanie aliasem weryfikuje
+  hasło w Firebase po stronie serwera, nie ujawniając powiązanego adresu e-mail.
 - E-mail tokenu musi odpowiadać kontaktowi z zaproszenia; mutacje pracownika wymagają
   potwierdzonego adresu e-mail.
 - Zaproszenia mają 12 znaków z alfabetu bez mylących znaków, SHA-256 w bazie, status,

@@ -4,11 +4,16 @@
 // permission to read/write Firestore without extra credentials.
 
 const { Firestore } = require('@google-cloud/firestore');
+const crypto = require('crypto');
 const db = new Firestore({ databaseId: 'anzan-db' });
+
+function loginNameId(normalizedName) {
+    return crypto.createHash('sha256').update(String(normalizedName || ''), 'utf8').digest('hex');
+}
 
 // ---------- USERS ----------
 // uid = trwały identyfikator z Firebase Authentication (NIE socket.id).
-async function registerUser(uid, { name, avatar, role, schoolId, schoolRole, contactEmail, contactPhone, linkedStudentUid }) {
+async function registerUser(uid, { name, avatar, role, schoolId, schoolRole, contactEmail, contactPhone, linkedStudentUid, loginNameNormalized }) {
     const userRef = db.collection('users').doc(uid);
     const snap = await userRef.get();
     if (!snap.exists) {
@@ -21,6 +26,7 @@ async function registerUser(uid, { name, avatar, role, schoolId, schoolRole, con
             contactEmail: contactEmail || '',
             contactPhone: contactPhone || '',
             linkedStudentUid: linkedStudentUid || '',
+            loginNameNormalized: loginNameNormalized || '',
             totalXp: 0,
             ownedItems: [],
             createdAt: Firestore.FieldValue.serverTimestamp()
@@ -39,6 +45,7 @@ async function registerUser(uid, { name, avatar, role, schoolId, schoolRole, con
         if (contactEmail) update.contactEmail = contactEmail;
         if (contactPhone) update.contactPhone = contactPhone;
         if (linkedStudentUid) update.linkedStudentUid = linkedStudentUid;
+        if (loginNameNormalized) update.loginNameNormalized = loginNameNormalized;
         await userRef.update(update);
     }
     // Lekki katalog pracowników szkoły: administrator nie musi skanować profili
@@ -56,6 +63,34 @@ async function registerUser(uid, { name, avatar, role, schoolId, schoolRole, con
 async function getUser(uid) {
     const snap = await db.collection('users').doc(uid).get();
     return snap.exists ? { uid: snap.id, ...snap.data() } : null;
+}
+
+async function findUidByLoginName(normalizedName) {
+    if (!normalizedName) return '';
+    const snap = await db.collection('loginNames').doc(loginNameId(normalizedName)).get();
+    return snap.exists ? String(snap.data().uid || '') : '';
+}
+
+async function claimLoginName(uid, normalizedName) {
+    if (!uid || !normalizedName) throw new Error('INVALID_LOGIN_NAME');
+    const aliasRef = db.collection('loginNames').doc(loginNameId(normalizedName));
+    await db.runTransaction(async transaction => {
+        const aliasSnap = await transaction.get(aliasRef);
+        if (aliasSnap.exists && aliasSnap.data().uid !== uid) throw new Error('LOGIN_NAME_TAKEN');
+        transaction.set(aliasRef, {
+            uid,
+            updatedAt: Firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    });
+}
+
+async function releaseLoginName(uid, normalizedName) {
+    if (!uid || !normalizedName) return;
+    const aliasRef = db.collection('loginNames').doc(loginNameId(normalizedName));
+    await db.runTransaction(async transaction => {
+        const snap = await transaction.get(aliasRef);
+        if (snap.exists && snap.data().uid === uid) transaction.delete(aliasRef);
+    });
 }
 
 async function updateTrainingPresets(uid, presets) {
@@ -487,6 +522,9 @@ async function healthCheck() {
 module.exports = {
     registerUser,
     getUser,
+    findUidByLoginName,
+    claimLoginName,
+    releaseLoginName,
     updateTrainingPresets,
     createClass,
     getClass,

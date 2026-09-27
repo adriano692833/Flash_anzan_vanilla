@@ -50,7 +50,7 @@ telefon jest zawsze opcjonalny. W **Plan szkoły → Twoje dane** użytkownik mo
 korektę lub usunięcie danych. Wniosek wymaga weryfikacji administratora; dane wymagane prawem
 mogą podlegać okresowi retencji.
 
-Nowe konto z e-mailem loguje się tym adresem; konto bez e-maila — nazwą użytkownika. Przycisk **Nie pamiętam
+Każde konto może logować się zamiennie unikalnym loginem albo przypisanym e-mailem. Przycisk **Nie pamiętam
 hasła** wysyła bezpieczny link Firebase na podany e-mail. Konto ucznia bez e-maila resetuje
 nauczyciel w liście uczniów. Odzyskiwanie przez SMS wymaga zewnętrznego dostawcy i pozostaje
 wyłączone, dopóki taka usługa nie zostanie podłączona.

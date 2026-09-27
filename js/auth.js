@@ -91,7 +91,6 @@
         },
 
         login: async function (username, password) {
-            const email = this._emailFor(username);
             // Rola nie jest wybierana podczas logowania. Serwer odczytuje ją z
             // istniejącego profilu w Firestore i traktuje jako autorytatywną.
             this._pendingRole = '';
@@ -99,7 +98,26 @@
             this._pendingContactEmail = '';
             this._pendingContactPhone = '';
             try {
-                await firebase.auth().signInWithEmailAndPassword(email, password);
+                if (String(username).includes('@')) {
+                    await firebase.auth().signInWithEmailAndPassword(this._emailFor(username), password);
+                } else {
+                    const response = await fetch('/api/auth/username', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username,
+                            password,
+                            apiKey: window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey
+                        })
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || !result.customToken) {
+                        const error = new Error(response.status === 429 ? 'Za dużo prób logowania.' : 'Błędny login lub hasło.');
+                        error.code = response.status === 429 ? 'auth/too-many-requests' : 'auth/invalid-credential';
+                        throw error;
+                    }
+                    await firebase.auth().signInWithCustomToken(result.customToken);
+                }
             } catch (e) {
                 app.ui && app.ui.toast && app.ui.toast('Logowanie: ' + this._friendly(e), 'error');
                 throw e;
@@ -157,6 +175,7 @@
             if (c.includes('invalid-email')) return 'adres e-mail jest nieprawidłowy.';
             if (c.includes('weak-password')) return 'hasło za krótkie (min. 6 znaków).';
             if (c.includes('wrong-password') || c.includes('invalid-credential')) return 'błędna nazwa lub hasło.';
+            if (c.includes('too-many-requests')) return 'za dużo prób. Odczekaj kilka minut.';
             if (c.includes('user-not-found')) return 'nie ma takiego konta.';
             if (c.includes('network')) return 'brak połączenia.';
             return (e && e.message) || 'nieznany błąd.';
@@ -239,16 +258,25 @@
         }
     };
 
-    window.authResetPassword = function () {
+    window.authResetPassword = async function () {
         const identifier = document.getElementById('auth-username').value.trim();
-        if (!identifier) return app.ui.toast('Podaj e-mail konta.', 'warning');
-        if (!identifier.includes('@')) return app.ui.toast('Konto bez e-maila resetuje nauczyciel lub administrator szkoły.', 'info');
-        firebase.auth().sendPasswordResetEmail(auth._emailFor(identifier))
-            .then(() => app.ui.toast('Jeśli konto istnieje, wiadomość do zmiany hasła została wysłana.', 'success'))
-            .catch((error) => {
-                if (String(error && error.code || '').includes('network')) app.ui.toast('Brak połączenia. Spróbuj ponownie.', 'error');
-                else app.ui.toast('Jeśli konto istnieje, wiadomość do zmiany hasła została wysłana.', 'success');
-            });
+        if (!identifier) return app.ui.toast('Podaj login albo e-mail konta.', 'warning');
+        try {
+            if (identifier.includes('@')) {
+                await firebase.auth().sendPasswordResetEmail(auth._emailFor(identifier));
+            } else {
+                const response = await fetch('/api/auth/password-reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: identifier, apiKey: window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey })
+                });
+                if (response.status === 429) return app.ui.toast('Za dużo prób. Odczekaj kilkanaście minut.', 'warning');
+            }
+            app.ui.toast('Jeśli konto ma przypisany e-mail, wiadomość do zmiany hasła została wysłana.', 'success');
+        } catch (error) {
+            if (String(error && error.code || '').includes('network')) app.ui.toast('Brak połączenia. Spróbuj ponownie.', 'error');
+            else app.ui.toast('Jeśli konto ma przypisany e-mail, wiadomość do zmiany hasła została wysłana.', 'success');
+        }
     };
 
     window.authSetMode = function (mode) {
@@ -272,16 +300,16 @@
         if (title) title.innerText = registering ? 'Dołącz do swojej szkoły' : 'Wejdź do swojej szkoły';
         if (subtitle) subtitle.innerText = registering
             ? 'Wpisz jednorazowy kod — rola, szkoła i klasa zostaną przypisane automatycznie.'
-            : 'Pracownik loguje się e-mailem, uczeń bez e-maila nazwą użytkownika.';
+            : 'Zaloguj się swoim loginem albo adresem e-mail.';
         if (password) password.autocomplete = registering ? 'new-password' : 'current-password';
         if (username) {
-            username.placeholder = registering ? 'wybierz login wyświetlany w aplikacji' : 'np. właściciel@szkola.pl lub ania2016';
+            username.placeholder = registering ? 'wybierz unikalny login' : 'np. adriano_właściciel lub właściciel@szkola.pl';
             username.autocomplete = registering ? 'username' : 'username';
         }
-        if (identifierLabel) identifierLabel.innerText = registering ? 'Nazwa użytkownika' : 'E-mail pracownika lub login ucznia';
+        if (identifierLabel) identifierLabel.innerText = registering ? 'Unikalny login' : 'Login lub e-mail';
         if (identifierHelp) identifierHelp.innerHTML = registering
             ? 'Ta nazwa będzie widoczna w aplikacji. Pracownik będzie później logował się podanym niżej e-mailem.'
-            : 'Właściciel, nauczyciel lub opiekun loguje się <b>e-mailem</b>. Uczeń bez e-maila — loginem.';
+            : 'Obie formy są zamienne. Hasło pozostaje takie samo.';
         if (reset) reset.style.display = registering ? 'none' : 'block';
         if (!registering) {
             const code = document.getElementById('auth-teacher-code');

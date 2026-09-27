@@ -40,9 +40,29 @@ function get(pathname) {
     });
 }
 
+function postJson(pathname, payload) {
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify(payload);
+        const request = http.request(`http://127.0.0.1:${port}${pathname}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+        }, response => {
+            let responseBody = '';
+            response.setEncoding('utf8');
+            response.on('data', chunk => { responseBody += chunk; });
+            response.on('end', () => resolve({ status: response.statusCode, body: responseBody }));
+        });
+        request.on('error', reject);
+        request.end(body);
+    });
+}
+
 async function verify() {
     try {
-        const [home, health, manifest] = await Promise.all([get('/'), get('/health'), get('/manifest.webmanifest')]);
+        const [home, health, manifest, aliasMalformed] = await Promise.all([
+            get('/'), get('/health'), get('/manifest.webmanifest'),
+            postJson('/api/auth/username', { username: 'x', password: 'x', apiKey: 'x' })
+        ]);
         clearTimeout(timeout);
         const healthData = JSON.parse(health.body);
         const manifestData = JSON.parse(manifest.body);
@@ -51,6 +71,7 @@ async function verify() {
             && home.body.includes('Panel właściciela szkoły')
             && home.body.includes('Plan, zadania i organizacja')
             && health.status === 200 && healthData.status === 'ok'
+            && aliasMalformed.status === 400
             && manifest.status === 200 && manifestData.short_name === 'Flash Anzan';
         finish(ok ? 0 : 1, ok ? 'Smoke test HTTP/PWA: OK' : 'Smoke test HTTP/PWA: niepełna odpowiedź aplikacji.');
     } catch (error) {

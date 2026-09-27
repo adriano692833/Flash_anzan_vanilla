@@ -10,6 +10,9 @@ const { Server } = require('socket.io');
 const {
     registerUser,
     getUser,
+    findUidByLoginName,
+    claimLoginName,
+    releaseLoginName,
     updateTrainingPresets,
     createClass,
     getClass,
@@ -82,6 +85,8 @@ async function verifyIdToken(idToken) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '8kb' }));
 
 // --- Configuration ---
 const PORT = process.env.PORT || 8080;
@@ -96,6 +101,94 @@ app.use((req, res, next) => {
     res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
     next();
 });
+const httpLoginLimits = new Map();
+
+function normalizeLoginName(value) {
+    return String(value || '').normalize('NFKC').trim().toLocaleLowerCase('pl-PL')
+        .replace(/[\x00-\x1f\x7f<>]/g, '').replace(/\s+/g, ' ').slice(0, 40);
+}
+
+function allowHttpLogin(key, max = 8, windowMs = 15 * 60 * 1000) {
+    const now = Date.now();
+    const current = httpLoginLimits.get(key);
+    if (!current || now >= current.resetAt) {
+        httpLoginLimits.set(key, { count: 1, resetAt: now + windowMs });
+        return true;
+    }
+    current.count += 1;
+    return current.count <= max;
+}
+
+app.post('/api/auth/username', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const username = normalizeLoginName(req.body && req.body.username);
+    const password = String(req.body && req.body.password || '');
+    const apiKey = String(req.body && req.body.apiKey || '');
+    if (username.length < 3 || username.includes('@') || password.length < 6 || apiKey.length < 20 || apiKey.length > 100) {
+        return res.status(400).json({ error: 'INVALID_REQUEST' });
+    }
+    const aliasKey = crypto.createHash('sha256').update(username).digest('hex');
+    const ipKey = `ip:${req.ip || req.socket.remoteAddress || 'unknown'}`;
+    if (!allowHttpLogin(ipKey, 20) || !allowHttpLogin(`name:${aliasKey}`, 8)) {
+        return res.status(429).json({ error: 'TOO_MANY_ATTEMPTS' });
+    }
+    try {
+        const uid = await findUidByLoginName(username);
+        if (!uid) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+        }
+        const user = await firebaseAuth.getUser(uid);
+        if (!user.email || user.disabled) return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+        const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: user.email, password, returnSecureToken: true })
+        });
+        const verified = await response.json().catch(() => ({}));
+        if (!response.ok || verified.localId !== uid || String(verified.email || '').toLowerCase() !== user.email.toLowerCase()) {
+            return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+        }
+        const customToken = await firebaseAuth.createCustomToken(uid, { login_method: 'username' });
+        return res.json({ customToken });
+    } catch (error) {
+        console.warn('[username-login] rejected:', error.code || error.message);
+        return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+    }
+});
+
+app.post('/api/auth/password-reset', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const username = normalizeLoginName(req.body && req.body.username);
+    const apiKey = String(req.body && req.body.apiKey || '');
+    if (username.length < 3 || username.includes('@') || apiKey.length < 20 || apiKey.length > 100) {
+        return res.status(400).json({ error: 'INVALID_REQUEST' });
+    }
+    const aliasKey = crypto.createHash('sha256').update(username).digest('hex');
+    const ipKey = `reset-ip:${req.ip || req.socket.remoteAddress || 'unknown'}`;
+    if (!allowHttpLogin(ipKey, 10, 60 * 60 * 1000) || !allowHttpLogin(`reset-name:${aliasKey}`, 3, 60 * 60 * 1000)) {
+        return res.status(429).json({ error: 'TOO_MANY_ATTEMPTS' });
+    }
+    try {
+        const uid = await findUidByLoginName(username);
+        if (uid) {
+            const user = await firebaseAuth.getUser(uid);
+            if (user.email && !user.email.endsWith('.anzan.local') && !user.disabled) {
+                await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(apiKey)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestType: 'PASSWORD_RESET', email: user.email })
+                });
+            }
+        } else {
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+    } catch (error) {
+        console.warn('[password-reset] request not delivered:', error.code || error.message);
+    }
+    return res.json({ accepted: true });
+});
+
 app.use(express.static('public'));
 
 // Placeholder so rooms is accessible to health endpoint below
@@ -157,6 +250,9 @@ setInterval(() => {
     const now = Date.now();
     for (const [key, val] of rateLimits.entries()) {
         if (now > val.resetAt + 10000) rateLimits.delete(key);
+    }
+    for (const [key, val] of httpLoginLimits.entries()) {
+        if (now > val.resetAt + 10000) httpLoginLimits.delete(key);
     }
 }, 30000);
 
@@ -641,6 +737,7 @@ io.on('connection', (socket) => {
             name || decoded.name || String(decoded.email || '').split('@')[0] || 'Uczeń'
         );
         const safeAvatar = sanitizeAvatar(avatar);
+        const normalizedLoginName = normalizeLoginName(safeName);
 
         // Przy logowaniu rola zawsze pochodzi z Firestore. Przy pierwszej rejestracji
         // jest wyprowadzana z jednorazowego zaproszenia, nigdy z wyboru w przeglądarce.
@@ -652,6 +749,8 @@ io.on('connection', (socket) => {
         let schoolRole = '';
         let canTeach = false;
         let isNewProfile = false;
+        let aliasClaimed = false;
+        let profileRegistered = false;
         try {
             const existing = await getUser(uid);
             if (existing) {
@@ -717,13 +816,20 @@ io.on('connection', (socket) => {
                             return;
                         }
                     }
-                    await claimInvitation(invitation.id, uid);
                 }
 
                 if (['school_admin', 'teacher', 'guardian'].includes(role) && !email) {
                     socket.emit('auth_error', { message: 'Dla konta pracownika lub opiekuna wymagany jest poprawny e-mail kontaktowy.', rollback: true });
                     return;
                 }
+                const aliasOwner = await findUidByLoginName(normalizedLoginName);
+                if (aliasOwner && aliasOwner !== uid) {
+                    socket.emit('auth_error', { message: 'Ta nazwa użytkownika jest już zajęta.', rollback: true });
+                    return;
+                }
+                await claimLoginName(uid, normalizedLoginName);
+                aliasClaimed = true;
+                if (invitation) await claimInvitation(invitation.id, uid);
                 await registerUser(uid, {
                     name: safeName,
                     avatar: safeAvatar,
@@ -732,8 +838,10 @@ io.on('connection', (socket) => {
                     schoolRole,
                     contactEmail: email,
                     contactPhone: phone,
-                    linkedStudentUid: invitation?.studentUid || ''
+                    linkedStudentUid: invitation?.studentUid || '',
+                    loginNameNormalized: normalizedLoginName
                 });
+                profileRegistered = true;
                 if (role === 'student' && invitation?.classId) {
                     await addClassMember(invitation.classId, uid, safeName, schoolId);
                 }
@@ -748,10 +856,20 @@ io.on('connection', (socket) => {
                 canTeach = stored.role === 'teacher' || stored.role === 'school_admin' || !!stored.canTeach;
             }
         } catch (e) {
+            if (aliasClaimed && !profileRegistered) {
+                try { await releaseLoginName(uid, normalizedLoginName); } catch (releaseError) {
+                    console.error('[register] alias rollback error:', releaseError.message);
+                }
+            }
             // Bez profilu z Firestore nie znamy autorytatywnej roli — cicha degradacja
             // do 'student' pokazywala nauczycielowi panel ucznia. Lepiej powiedziec wprost.
             console.error('[register] Firestore error:', e.message);
-            socket.emit('auth_error', { message: 'Serwer nie mógł bezpiecznie utworzyć profilu. Poproś o nowe zaproszenie.', rollback: isNewProfile });
+            socket.emit('auth_error', {
+                message: profileRegistered
+                    ? 'Profil utworzono, ale nie zakończono konfiguracji. Odśwież stronę.'
+                    : 'Serwer nie mógł bezpiecznie utworzyć profilu. Poproś o nowe zaproszenie.',
+                rollback: isNewProfile && !profileRegistered
+            });
             return;
         }
 
