@@ -84,6 +84,7 @@
                 <div class="nav-item" onclick="nav('worksheet')">📝 Arkusz</div>
                 <div class="nav-item" onclick="nav('multiplayer')" style="color: var(--accent);">🌐 Multiplayer</div>
                 <div class="nav-item" onclick="nav('settings')">⚙️ Ustawienia</div>
+                <div class="nav-item" onclick="app.auth.logout()" style="color:#fca5a5;">🚪 Wyloguj</div>
             </nav>
             <div id="app-version" style="margin-top:auto; text-align:center; color:var(--text-muted); font-size:0.8rem">
             </div>
@@ -608,6 +609,7 @@
             <div class="mobile-nav-item" onclick="nav('spoken')">🗣️</div>
             <div class="mobile-nav-item" onclick="nav('worksheet')">📝</div>
             <div class="mobile-nav-item" onclick="nav('settings')">⚙️</div>
+            <div class="mobile-nav-item" onclick="app.auth.logout()" title="Wyloguj">🚪</div>
         </div>
     </div>
 
