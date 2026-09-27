@@ -273,9 +273,8 @@ app.get('/ready', async (req, res) => {
 
 const server = http.createServer(app);
 
-// Socket.IO — long-polling jako podstawa, WebSocket tylko jako opcjonalny upgrade.
-// App Engine *standard* nie przepuszcza WebSocketow (to domena srodowiska flexible /
-// Cloud Run), wiec wymuszanie WS konczylo sie bledem "websocket error" i cisza.
+// App Engine standard nie obsługuje WebSocketów. Polling utrzymuje koszty blisko
+// zera i działa stabilnie przy pojedynczej instancji przechowującej stan pokoi.
 const io = new Server(server, {
     cors: {
         origin: (origin, callback) => {
@@ -286,7 +285,8 @@ const io = new Server(server, {
         methods: ['GET', 'POST'],
         credentials: true
     },
-    transports: ['polling', 'websocket']
+    transports: ['polling'],
+    allowUpgrades: false
 });
 
 // --- Rate limiting (in-memory, per socket+event) ---
