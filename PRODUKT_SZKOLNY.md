@@ -4,6 +4,7 @@
 
 - 20 poziomów Kyu z generatorem zgodnym z technikami sorobanu.
 - Flash Anzan, tryb głosowy, arkusze PDF, survival i zajęcia multiplayer.
+- Oddzielne role administratora szkoły, nauczyciela i ucznia.
 - Organizację szkoły, wielu nauczycieli i współdzielone klasy.
 - Kontrolowane wejście uczniów do pokoju i serwerową walidację wyników.
 - Ranking klasy, ranking globalny oraz raport ostatnich 30 zajęć.

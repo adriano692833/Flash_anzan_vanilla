@@ -40,10 +40,11 @@
             <select id="auth-role" class="input-lg" style="margin-bottom: 1rem;" onchange="authToggleRole()">
                 <option value="student">🎓 Uczeń</option>
                 <option value="teacher">👨‍🏫 Nauczyciel</option>
+                <option value="school_admin">🛡️ Administrator szkoły</option>
             </select>
             <div id="auth-teacher-code-row" style="display:none; margin-bottom: 1rem;">
-                <label class="stat-label">Kod szkoły</label>
-                <input type="password" id="auth-teacher-code" class="input-lg" placeholder="kod zaproszenia lub kod uruchomieniowy">
+                <label id="auth-code-label" class="stat-label">Kod zaproszenia szkoły</label>
+                <input type="password" id="auth-teacher-code" class="input-lg" placeholder="kod od administratora szkoły">
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
                 <button class="btn btn-primary" onclick="authSubmit('login')">Zaloguj</button>
@@ -452,12 +453,12 @@
                     </div>
 
                     <div id="mp-home">
-                        <!-- PANEL NAUCZYCIELA -->
-                        <div id="teacher-panel" style="display:none;">
+                        <!-- PANEL ADMINISTRATORA SZKOŁY -->
+                        <div id="admin-panel" style="display:none;">
                             <div class="glass-card" id="school-card" style="max-width:700px; margin:0 auto 1rem auto; border-left:3px solid var(--secondary);">
                                 <div id="school-onboarding">
-                                    <h2 style="margin-bottom:0.5rem;">🏫 Twoja szkoła</h2>
-                                    <p style="color:var(--text-muted); margin-bottom:1rem;">Utwórz przestrzeń szkoły, aby współdzielić klasy z nauczycielami i budować historię zajęć.</p>
+                                    <h2 style="margin-bottom:0.5rem;">🏫 Utwórz organizację szkoły</h2>
+                                    <p style="color:var(--text-muted); margin-bottom:1rem;">Administrator tworzy szkołę i przekazuje nauczycielom rotowany kod zaproszenia.</p>
                                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                                         <input type="text" id="school-name" class="input-lg" placeholder="Nazwa szkoły" style="flex:1; min-width:220px;">
                                         <button class="btn btn-primary" onclick="app.multi.createSchool()">Utwórz szkołę</button>
@@ -466,6 +467,15 @@
                                 <div id="school-info" style="display:none;"></div>
                             </div>
                             <div class="glass-card" style="max-width:700px; margin:0 auto 1rem auto; border-left:3px solid var(--accent);">
+                                <b>Zakres administratora</b>
+                                <p style="color:var(--text-muted); margin:0.5rem 0 0;">Tworzenie szkoły, aktywacja licencji i zapraszanie nauczycieli. Klasy oraz zajęcia prowadzą konta nauczycieli.</p>
+                            </div>
+                        </div>
+
+                        <!-- PANEL NAUCZYCIELA -->
+                        <div id="teacher-panel" style="display:none;">
+                            <div class="glass-card" style="max-width:700px; margin:0 auto 1rem auto; border-left:3px solid var(--accent);">
+                                <div id="teacher-school-summary" style="font-weight:700; margin-bottom:0.6rem;"></div>
                                 <div style="font-size:0.9rem; color:var(--text-muted); line-height:1.6;">
                                     <b style="color:var(--text-main)">Jak poprowadzić zajęcia:</b><br>
                                     1. Utwórz klasę → 2. podaj uczniom <b>kod klasy</b> (raz na rok) →
@@ -537,7 +547,7 @@
                         </div>
 
                         <!-- RANKING -->
-                        <div class="glass-card" style="max-width:600px; margin:0 auto;">
+                        <div id="ranking-panel" class="glass-card" style="max-width:600px; margin:0 auto;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
                                 <h2 id="leaderboard-title" style="margin:0;">🏆 Ranking</h2>
                                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">

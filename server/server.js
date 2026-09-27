@@ -542,28 +542,50 @@ io.on('connection', (socket) => {
         );
         const safeAvatar = sanitizeAvatar(avatar);
 
-        // Rola nauczyciela tylko z poprawnym kodem dostępu. Istniejący nauczyciel
-        // nie musi ponownie podawać kodu przy każdym odświeżeniu strony.
+        // Administrator zakłada szkołę kodem uruchomieniowym. Nauczyciel może wejść
+        // tylko z kodem zaproszenia konkretnej szkoły. Istniejąca rola z Firestore
+        // pozostaje autorytatywna przy kolejnych logowaniach.
         let role = 'student';
         let effectiveRole = role;
         let schoolId = '';
         let schoolRole = '';
         try {
             const existing = await getUser(uid);
-            if (existing?.role === 'teacher') {
-                role = 'teacher';
+            if (existing?.role === 'school_admin' || existing?.role === 'teacher') {
+                role = existing.schoolRole === 'owner' ? 'school_admin' : existing.role;
                 schoolId = existing.schoolId || '';
                 schoolRole = existing.schoolRole || '';
+                // Migracja właścicieli utworzonych przed wprowadzeniem jawnej roli admina.
+                if (role === 'school_admin') schoolRole = 'owner';
+                // Starsze, nieprzypisane konto nauczyciela można awansować wyłącznie
+                // kodem uruchomieniowym administratora.
+                if (!schoolId && requestedRole === 'school_admin'
+                    && TEACHER_ACCESS_CODE && teacherCode === TEACHER_ACCESS_CODE) {
+                    role = 'school_admin';
+                    schoolRole = '';
+                } else if (!schoolId && requestedRole === 'teacher' && teacherCode) {
+                    const invitedSchool = await findSchoolByTeacherCode(sanitizeInviteCode(teacherCode));
+                    if (invitedSchool) {
+                        role = 'teacher';
+                        schoolId = invitedSchool.id;
+                        schoolRole = 'teacher';
+                    }
+                }
+            } else if (requestedRole === 'school_admin') {
+                if (TEACHER_ACCESS_CODE && teacherCode === TEACHER_ACCESS_CODE) {
+                    role = 'school_admin';
+                } else {
+                    socket.emit('auth_error', { message: 'Błędny kod administratora.', rollback: true });
+                    return;
+                }
             } else if (requestedRole === 'teacher') {
                 const invitedSchool = await findSchoolByTeacherCode(sanitizeInviteCode(teacherCode));
                 if (invitedSchool) {
                     role = 'teacher';
                     schoolId = invitedSchool.id;
                     schoolRole = 'teacher';
-                } else if (TEACHER_ACCESS_CODE && teacherCode === TEACHER_ACCESS_CODE) {
-                    role = 'teacher';
                 } else {
-                    socket.emit('auth_error', { message: 'Błędny kod szkoły lub kod uruchomieniowy.' });
+                    socket.emit('auth_error', { message: 'Błędny kod zaproszenia szkoły.', rollback: true });
                     return;
                 }
             }
@@ -600,7 +622,10 @@ io.on('connection', (socket) => {
     }
 
     async function requireActiveSchool() {
-        if (!socket.data.schoolId) return true; // zgodność ze starszymi, samodzielnymi kontami
+        if (!socket.data.schoolId) {
+            socket.emit('error_msg', 'Konto nie jest przypisane do aktywnej szkoły. Poproś administratora o kod zaproszenia.');
+            return false;
+        }
         try {
             const school = await getSchool(socket.data.schoolId);
             if (school?.status === 'active') return true;
@@ -615,7 +640,7 @@ io.on('connection', (socket) => {
     socket.on('create_school', async ({ name }) => {
         if (!checkRateLimit(socket.id, 'create_school', 3, 60000)) return;
         if (!requireAuth()) return;
-        if (socket.data.accountRole !== 'teacher') return socket.emit('error_msg', 'Tylko nauczyciel może utworzyć szkołę.');
+        if (socket.data.accountRole !== 'school_admin') return socket.emit('error_msg', 'Tylko administrator może utworzyć szkołę.');
         if (socket.data.schoolId) return socket.emit('error_msg', 'Konto jest już przypisane do szkoły.');
         const schoolName = sanitizeLabel(name, 80);
         if (!schoolName) return socket.emit('error_msg', 'Podaj nazwę szkoły.');
@@ -630,7 +655,8 @@ io.on('connection', (socket) => {
             });
             socket.data.schoolId = schoolId;
             socket.data.schoolRole = 'owner';
-            socket.emit('school_data', { id: schoolId, name: schoolName, teacherJoinCode, plan: 'trial', schoolRole: 'owner' });
+            socket.data.accountRole = 'school_admin';
+            socket.emit('school_data', { id: schoolId, name: schoolName, teacherJoinCode, plan: 'trial', status: 'active', schoolRole: 'owner' });
         } catch (error) {
             console.error('[create_school] error:', error.message);
             socket.emit('error_msg', 'Nie udało się utworzyć szkoły.');

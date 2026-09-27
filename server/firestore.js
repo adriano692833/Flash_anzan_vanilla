@@ -23,14 +23,14 @@ async function registerUser(uid, { name, avatar, role, schoolId, schoolRole }) {
             createdAt: Firestore.FieldValue.serverTimestamp()
         });
     } else {
-        // Aktualizuj dane profilu; NIE nadpisuj totalXp. Rolę ustaw, jeśli brak;
-        // dopuść awans na nauczyciela (z poprawnym kodem sprawdzanym w serwerze),
-        // ale nigdy nie degraduj nauczyciela do ucznia.
+        // Aktualizuj dane profilu; NIE nadpisuj totalXp. Awans roli jest wcześniej
+        // autoryzowany przez serwer kodem szkoły albo kodem administratora.
         const update = { name };
         if (avatar) update.avatar = avatar;
         const cur = snap.data().role;
         if (!cur) update.role = role || 'student';
-        else if (role === 'teacher' && cur !== 'teacher') update.role = 'teacher';
+        else if (role === 'school_admin' && cur !== 'school_admin') update.role = 'school_admin';
+        else if (role === 'teacher' && cur === 'student') update.role = 'teacher';
         if (schoolId) update.schoolId = schoolId;
         if (schoolRole) update.schoolRole = schoolRole;
         await userRef.update(update);
@@ -197,7 +197,7 @@ async function createSchool(schoolId, { name, ownerUid, ownerName, teacherJoinCo
             seatLimit: 100,
             createdAt: Firestore.FieldValue.serverTimestamp()
         });
-        transaction.update(userRef, { schoolId, schoolRole: 'owner' });
+        transaction.update(userRef, { schoolId, schoolRole: 'owner', role: 'school_admin' });
     });
     const legacyClasses = await db.collection('classes').where('teacherUid', '==', ownerUid).get();
     if (!legacyClasses.empty) {

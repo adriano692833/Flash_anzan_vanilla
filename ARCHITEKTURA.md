@@ -15,7 +15,7 @@ dane w Firestore. To najtańszy rozsądny wariant dla produktu na etapie pierwsz
 
 ## Model danych
 
-- `users/{uid}` — profil, rola, szkoła, XP i bieżąca klasa.
+- `users/{uid}` — profil i jawna rola `school_admin`, `teacher` albo `student`, szkoła, XP i bieżąca klasa.
 - `schools/{schoolId}` — właściciel, plan, status licencji i rotowany kod zaproszenia nauczycieli.
 - `classes/{classId}` — szkoła, nauczyciel założyciel, rok, kod dołączenia i status.
 - `classes/{classId}/members/{uid}` — uczeń, punkty i ostatnia aktywność.
@@ -28,8 +28,8 @@ operacji Firestore i koszt. Aktywne pokoje pozostają w pamięci procesu.
 
 - Tożsamość pochodzi z tokenu Firebase Auth zweryfikowanego przez serwer.
 - Klient nie ma bezpośredniego dostępu do Firestore (`firestore.rules` blokuje wszystko).
-- Nauczyciel zarządza klasami własnej szkoły; uczeń widzi klasę, do której należy.
-- Kod szkoły zaprasza nauczyciela, a właściciel może go w każdej chwili obrócić.
+- Administrator tworzy organizację i zaprasza nauczycieli; nauczyciel prowadzi klasy i zajęcia.
+- Kod szkoły zaprasza nauczyciela, a administrator może go w każdej chwili obrócić.
 - `schools.status = active` jest lekkim przełącznikiem licencji. Zawieszenie blokuje nowe klasy i pokoje.
 
 ## Uruchomienie i koszt

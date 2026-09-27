@@ -80,7 +80,7 @@ const KYU_VERSION = 4;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '6.0 School Pro';
+const APP_VERSION = '6.1 School Pro';
 const APP_UPDATED = '2026-09-27';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -968,8 +968,11 @@ const app = {
         const totalXp = (d.totalXp || 0) + (d.soloXp || 0);
 
         set('prof-name', d.name || '—');
-        set('prof-role', d.role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń');
-        set('prof-class', d.className ? ('Klasa: ' + d.className) : 'Nie należysz jeszcze do klasy');
+        const roleLabel = d.role === 'school_admin' ? '🛡️ Administrator szkoły'
+            : d.role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń';
+        set('prof-role', roleLabel);
+        set('prof-class', d.className ? ('Klasa: ' + d.className)
+            : d.role === 'student' ? 'Nie należysz jeszcze do klasy' : 'Konto pracownika szkoły');
         set('prof-mp-xp', Math.floor(d.totalXp || 0));
         set('prof-solo-xp', Math.floor(d.soloXp || 0));
         set('prof-class-pts', Math.floor(d.classPoints || 0));

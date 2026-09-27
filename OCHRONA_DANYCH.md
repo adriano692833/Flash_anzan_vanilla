@@ -18,7 +18,7 @@ Należy utrzymać tę minimalizację.
 
 - autorytatywna tożsamość z tokenu Firebase,
 - brak bezpośredniego dostępu klienta do Firestore,
-- role szkoły, klasy i pokoju rozdzielone po stronie serwera,
+- role administratora szkoły, nauczyciela, ucznia i pokoju rozdzielone po stronie serwera,
 - limity żądań na zdarzeniach Socket.IO,
 - rotowany kod zaproszenia nauczycieli,
 - raporty dostępne wyłącznie nauczycielom danej szkoły,

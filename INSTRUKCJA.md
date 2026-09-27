@@ -12,16 +12,16 @@ natomiast postęp trybów solo (Flash, Głosowy, Arkusz, Survival) pozostaje lok
 ### 1. Załóż konto
 1. Wejdź na stronę → zakładka **🌐 Multiplayer**.
 2. Wpisz **nazwę** i **hasło** (min. 6 znaków).
-3. Rola: **Nauczyciel** → pojawi się pole **Kod szkoły**. Pierwszy właściciel wpisuje kod
-   uruchomieniowy od administratora, a kolejni nauczyciele rotowany kod zaproszenia szkoły.
+3. Pierwsza osoba wybiera **Administrator szkoły** i wpisuje kod uruchomieniowy platformy.
+   Nauczyciel wybiera rolę **Nauczyciel** i używa kodu zaproszenia otrzymanego od administratora szkoły.
 4. Kliknij **Załóż konto** (następnym razem **Zaloguj**).
 
-### 2. Skonfiguruj szkołę
-1. Pierwszy nauczyciel wpisuje nazwę szkoły i wybiera **Utwórz szkołę**.
-2. Właściciel widzi kod zaproszenia. Przekazuje go tylko nauczycielom swojej placówki.
+### 2. Skonfiguruj szkołę (administrator)
+1. Administrator wpisuje nazwę placówki i wybiera **Utwórz szkołę**.
+2. Administrator widzi kod zaproszenia. Przekazuje go tylko nauczycielom swojej placówki.
 3. Przycisk **Zmień kod** unieważnia poprzedni kod bez wpływu na istniejące konta.
 
-### 3. Utwórz klasę (raz na rok szkolny)
+### 3. Utwórz klasę (nauczyciel, raz na rok szkolny)
 1. W panelu nauczyciela: **Moje klasy** → wpisz **nazwę klasy** i **rok** (np. 2025/2026) → **Utwórz klasę**.
 2. Dostaniesz **kod dołączenia** (np. `ABC123`) — podaj go uczniom.
 

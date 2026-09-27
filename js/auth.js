@@ -73,7 +73,8 @@
                 this._pendingRole = role;
                 this._pendingTeacherCode = teacherCode;
                 this._rememberRole(role);
-                app.ui && app.ui.toast && app.ui.toast('Konto utworzone!', 'success');
+                this._createdForRegistration = true;
+                app.ui && app.ui.toast && app.ui.toast('Weryfikuję uprawnienia konta…', 'info');
                 this._suppressAutoRegister = false;
                 this._onLoggedIn();
             } catch (e) {
@@ -103,6 +104,22 @@
             location.reload();
         },
 
+        confirmRegistration: function () {
+            if (this._createdForRegistration && app.ui && app.ui.toast) {
+                app.ui.toast('Konto utworzone i aktywowane!', 'success');
+            }
+            this._createdForRegistration = false;
+        },
+
+        rollbackRegistration: async function () {
+            if (!this._createdForRegistration || !this._fbUser) return;
+            this._createdForRegistration = false;
+            try { await this._fbUser.delete(); } catch (e) { /* świeże konto może być już usunięte */ }
+            this._fbUser = null;
+            this.user = null;
+            this._showAuthScreen(true);
+        },
+
         _friendly: function (e) {
             const c = e && e.code || '';
             if (c.includes('email-already-in-use')) return 'nazwa jest już zajęta.';
@@ -130,7 +147,8 @@
         },
 
         _rememberRole: function (role) {
-            try { localStorage.setItem(ROLE_INTENT_KEY, role === 'teacher' ? 'teacher' : 'student'); }
+            const safeRole = ['student', 'teacher', 'school_admin'].includes(role) ? role : 'student';
+            try { localStorage.setItem(ROLE_INTENT_KEY, safeRole); }
             catch (e) { /* ignore */ }
         },
         _recallRole: function () {
@@ -177,6 +195,10 @@
     window.authToggleRole = function () {
         const role = document.getElementById('auth-role').value;
         const tc = document.getElementById('auth-teacher-code-row');
-        if (tc) tc.style.display = role === 'teacher' ? 'block' : 'none';
+        const label = document.getElementById('auth-code-label');
+        const input = document.getElementById('auth-teacher-code');
+        if (tc) tc.style.display = role === 'student' ? 'none' : 'block';
+        if (label) label.innerText = role === 'school_admin' ? 'Kod administratora' : 'Kod zaproszenia szkoły';
+        if (input) input.placeholder = role === 'school_admin' ? 'kod uruchomieniowy platformy' : 'kod od administratora szkoły';
     };
 })();

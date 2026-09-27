@@ -72,7 +72,7 @@ the command updates `server/public/` and the backend copy of the shared generato
 | `firestore.rules` | (repo root) Denies all direct client DB access — everything goes through the server |
 
 ### Database — Google Firestore (`anzan-db`)
-- `users/{uid}` — `name`, `avatar`, `role` ('teacher'|'student'), `totalXp` (global all-time), `createdAt`.
+- `users/{uid}` — `name`, `avatar`, `role` (`school_admin`|`teacher`|`student`), `totalXp` (global all-time), `createdAt`.
   **`uid` is the Firebase Auth uid** (persistent), not the socket id.
 - `schools/{schoolId}` — tenant, owner, plan/status and rotatable teacher join code.
 - `classes/{classId}` — `schoolId`, `name`, `teacherUid`, `teacherName`, `schoolYear`, `joinCode`, `active`, `createdAt`.
@@ -93,7 +93,7 @@ the command updates `server/public/` and the backend copy of the shared generato
 
 ### Multiplayer data flow
 1. User logs in (Firebase) → client connects Socket.IO → `register {idToken,...}` → server verifies, sets `socket.uid`/role.
-2. First teacher creates a **school**; its owner can invite other teachers with a rotatable code.
+2. School administrator creates a **school** and invites teachers with a rotatable code.
 3. Teacher creates a **class** (join code) once; students join the class by code.
 4. Teacher creates a **room linked to a class** → students `request_join` → teacher approves (approval gate).
 5. Host starts game → server generates task from Kyu config (incl. display speed `t`) → broadcasts to the room.

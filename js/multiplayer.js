@@ -118,7 +118,10 @@
                 if (d.role === 'teacher') {
                     this.loadClasses();
                     this.requestSchool();
+                } else if (d.role === 'school_admin') {
+                    this.requestSchool();
                 }
+                if (app.auth && app.auth.confirmRegistration) app.auth.confirmRegistration();
                 this.updateAuthUI(d.role);
                 this.setStatus('online');
                 // Pasek boczny ma pokazywac dorobek konta od razu po zalogowaniu.
@@ -129,6 +132,9 @@
                 const m = (d && d.message) || 'Błąd logowania.';
                 this.setStatus('error', m);
                 app.ui.toast(m, 'error');
+                if (d && d.rollback && app.auth && app.auth.rollbackRegistration) {
+                    app.auth.rollbackRegistration();
+                }
             });
 
             // --- KLASY I RANKING ---
@@ -426,6 +432,7 @@
         },
 
         createSchool: function () {
+            if (this.myRole !== 'school_admin') return app.ui.toast('Tylko administrator może utworzyć szkołę.', 'warning');
             const name = ((document.getElementById('school-name') || {}).value || '').trim();
             if (!name) return app.ui.toast('Podaj nazwę szkoły.', 'warning');
             this.init();
@@ -442,26 +449,29 @@
         renderSchool: function (school) {
             const onboarding = document.getElementById('school-onboarding');
             const info = document.getElementById('school-info');
-            if (!onboarding || !info) return;
+            const teacherSummary = document.getElementById('teacher-school-summary');
             if (!school) {
-                onboarding.style.display = 'block';
-                info.style.display = 'none';
+                if (onboarding) onboarding.style.display = this.myRole === 'school_admin' ? 'block' : 'none';
+                if (info) info.style.display = 'none';
+                if (teacherSummary) teacherSummary.innerText = '⚠️ Konto nie jest jeszcze przypisane do szkoły — zaloguj się ponownie z kodem zaproszenia administratora.';
                 return;
             }
             this.schoolId = school.id;
             this.schoolRole = school.schoolRole || this.schoolRole || 'teacher';
+            if (teacherSummary) teacherSummary.innerText = `🏫 ${school.name || 'Szkoła'} · ${school.status === 'active' ? 'aktywna' : 'nieaktywna'}`;
+            if (!onboarding || !info) return;
             onboarding.style.display = 'none';
             info.style.display = 'block';
             const isOwner = this.schoolRole === 'owner';
             info.innerHTML = `
                 <div class="report-header">
                     <div><h2 style="margin:0;">🏫 ${he(school.name || 'Szkoła')}</h2>
-                    <div class="stat-label">Plan: ${he(school.plan || 'trial')} · ${isOwner ? 'Właściciel' : 'Nauczyciel'}</div></div>
+                    <div class="stat-label">Plan: ${he(school.plan || 'trial')} · ${isOwner ? 'Administrator szkoły' : 'Nauczyciel'}</div></div>
                     <span class="school-status ${school.status === 'active' ? '' : 'is-inactive'}">${school.status === 'active' ? 'Aktywna' : 'Nieaktywna'}</span>
                 </div>
                 ${isOwner ? `<div class="school-invite"><div><span class="stat-label">Kod zaproszenia dla nauczycieli</span><strong>${he(school.teacherJoinCode || '—')}</strong></div>
                 <button class="btn btn-secondary" onclick="app.multi.rotateSchoolTeacherCode()">Zmień kod</button></div>` : ''}`;
-            this.loadClasses();
+            if (this.myRole === 'teacher') this.loadClasses();
         },
 
         // --- ZARZĄDZANIE KLASAMI (nauczyciel) ---
@@ -659,18 +669,23 @@
                 : '<div style="color:var(--text-muted); padding:0.6rem">Brak wyników.</div>';
         },
         updateAuthUI: function (role) {
+            const a = document.getElementById('admin-panel');
             const t = document.getElementById('teacher-panel');
             const s = document.getElementById('student-panel');
+            const ranking = document.getElementById('ranking-panel');
+            if (a) a.style.display = role === 'school_admin' ? 'block' : 'none';
             if (t) t.style.display = role === 'teacher' ? 'block' : 'none';
-            if (s) s.style.display = role === 'teacher' ? 'none' : 'block';
+            if (s) s.style.display = role === 'student' ? 'block' : 'none';
+            if (ranking) ranking.style.display = role === 'school_admin' ? 'none' : 'block';
 
-            const label = role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń';
+            const label = role === 'school_admin' ? '🛡️ Administrator szkoły'
+                : role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń';
             ['auth-role-badge', 'side-role-badge'].forEach((id) => {
                 const badge = document.getElementById(id);
                 if (!badge) return;
                 badge.innerText = label;
                 badge.style.display = 'inline-block';
-                badge.style.borderColor = role === 'teacher' ? 'var(--accent)' : 'var(--glass-border)';
+                badge.style.borderColor = role === 'student' ? 'var(--glass-border)' : 'var(--accent)';
             });
         },
 
