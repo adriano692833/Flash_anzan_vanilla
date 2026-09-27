@@ -119,6 +119,22 @@ function allowHttpLogin(key, max = 8, windowMs = 15 * 60 * 1000) {
     return current.count <= max;
 }
 
+async function requestFirebaseVerificationEmail(idToken, apiKey) {
+    const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(apiKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestType: 'VERIFY_EMAIL', idToken })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const providerCode = String(result && result.error && result.error.message || `HTTP_${response.status}`)
+            .replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80);
+        const error = new Error(providerCode || 'FIREBASE_EMAIL_ERROR');
+        error.status = response.status;
+        throw error;
+    }
+}
+
 app.post('/api/auth/username', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const username = normalizeLoginName(req.body && req.body.username);
@@ -149,11 +165,47 @@ app.post('/api/auth/username', async (req, res) => {
         if (!response.ok || verified.localId !== uid || String(verified.email || '').toLowerCase() !== user.email.toLowerCase()) {
             return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
         }
+        let verificationEmailRequested = false;
+        if (!user.emailVerified && !user.email.endsWith('.anzan.local') && allowHttpLogin(`verify-uid:${uid}`, 3, 60 * 60 * 1000)) {
+            try {
+                await requestFirebaseVerificationEmail(verified.idToken, apiKey);
+                verificationEmailRequested = true;
+                console.info('[verification-email] accepted for uid:', uid.slice(0, 8));
+            } catch (error) {
+                console.warn('[verification-email] provider rejected:', error.message);
+            }
+        }
         const customToken = await firebaseAuth.createCustomToken(uid, { login_method: 'username' });
-        return res.json({ customToken });
+        return res.json({ customToken, verificationEmailRequested });
     } catch (error) {
         console.warn('[username-login] rejected:', error.code || error.message);
         return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
+    }
+});
+
+app.post('/api/auth/send-verification', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const idToken = String(req.body && req.body.idToken || '');
+    const apiKey = String(req.body && req.body.apiKey || '');
+    if (idToken.length < 100 || idToken.length > 5000 || apiKey.length < 20 || apiKey.length > 100) {
+        return res.status(400).json({ error: 'INVALID_REQUEST' });
+    }
+    try {
+        const decoded = await firebaseAuth.verifyIdToken(idToken, true);
+        const user = await firebaseAuth.getUser(decoded.uid);
+        if (!user.email || user.email.endsWith('.anzan.local') || user.disabled) {
+            return res.status(400).json({ error: 'EMAIL_NOT_AVAILABLE' });
+        }
+        if (user.emailVerified) return res.json({ accepted: true, alreadyVerified: true });
+        if (!allowHttpLogin(`verify-uid:${user.uid}`, 3, 60 * 60 * 1000)) {
+            return res.status(429).json({ error: 'TOO_MANY_ATTEMPTS' });
+        }
+        await requestFirebaseVerificationEmail(idToken, apiKey);
+        console.info('[verification-email] accepted for uid:', user.uid.slice(0, 8));
+        return res.json({ accepted: true });
+    } catch (error) {
+        console.warn('[verification-email] request failed:', error.code || error.message);
+        return res.status(error.status === 429 ? 429 : 502).json({ error: 'EMAIL_DELIVERY_REJECTED' });
     }
 });
 

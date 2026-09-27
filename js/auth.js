@@ -136,9 +136,7 @@
                 app.ui.toast('Konto utworzone i aktywowane!', 'success');
                 const email = String(this._fbUser && this._fbUser.email || '');
                 if (email && !email.endsWith('.anzan.local') && !this._fbUser.emailVerified) {
-                    this._fbUser.sendEmailVerification().then(() => {
-                        app.ui.toast('Wysłaliśmy też wiadomość potwierdzającą e-mail.', 'info');
-                    }).catch(() => { /* odzyskiwanie hasła nadal pozostaje dostępne */ });
+                    this.sendVerificationEmail();
                 }
             }
             this._createdForRegistration = false;
@@ -150,7 +148,21 @@
             }
             if (this._fbUser.emailVerified) return app.ui.toast('E-mail jest już potwierdzony.', 'success');
             try {
-                await this._fbUser.sendEmailVerification();
+                const idToken = await this._fbUser.getIdToken(true);
+                const response = await fetch('/api/auth/send-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        idToken,
+                        apiKey: window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey
+                    })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const error = new Error(result.error || 'EMAIL_DELIVERY_REJECTED');
+                    error.code = response.status === 429 ? 'auth/too-many-requests' : 'auth/email-delivery-rejected';
+                    throw error;
+                }
                 app.ui.toast('Wiadomość wysłana. Sprawdź Odebrane i Spam.', 'success');
             } catch (error) {
                 const code = String(error && error.code || '');
