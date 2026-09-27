@@ -14,10 +14,13 @@ const child = spawn(process.execPath, ['server.js'], {
 
 let stderr = '';
 let stdout = '';
+let done = false;
 child.stderr.on('data', chunk => { stderr += chunk; });
 child.stdout.on('data', chunk => { stdout += chunk; });
 
 function finish(code, message) {
+    if (done) return;
+    done = true;
     if (!child.killed) child.kill();
     if (message) (code ? console.error : console.log)(message);
     if (code && stdout.trim()) console.error(stdout.trim());
@@ -25,7 +28,7 @@ function finish(code, message) {
     process.exitCode = code;
 }
 
-const timeout = setTimeout(() => finish(1, 'Smoke test: timeout uruchomienia serwera.'), 10000);
+const timeout = setTimeout(() => finish(1, 'Smoke test: timeout uruchomienia serwera.'), 15000);
 function get(pathname) {
     return new Promise((resolve, reject) => {
         http.get(`http://127.0.0.1:${port}${pathname}`, response => {
@@ -37,7 +40,7 @@ function get(pathname) {
     });
 }
 
-setTimeout(async () => {
+async function verify() {
     try {
         const [home, health, manifest] = await Promise.all([get('/'), get('/health'), get('/manifest.webmanifest')]);
         clearTimeout(timeout);
@@ -48,7 +51,8 @@ setTimeout(async () => {
             && manifest.status === 200 && manifestData.short_name === 'Anzan Pro';
         finish(ok ? 0 : 1, ok ? 'Smoke test HTTP/PWA: OK' : 'Smoke test HTTP/PWA: niepełna odpowiedź aplikacji.');
     } catch (error) {
-        clearTimeout(timeout);
-        finish(1, `Smoke test HTTP: ${error.message}`);
+        if (!done) setTimeout(verify, 500);
     }
-}, 3000);
+}
+
+setTimeout(verify, 500);
