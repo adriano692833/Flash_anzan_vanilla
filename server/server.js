@@ -37,8 +37,10 @@ const SorobanGen = require('./soroban-generator');
 
 // Firebase Admin — weryfikacja tokenów logowania. Na App Engine działa na
 // domyślnym koncie serwisowym (bez sekretów w repo).
-const admin = require('firebase-admin');
-try { admin.initializeApp(); } catch (e) { /* już zainicjalizowane */ }
+const { initializeApp, getApp, getApps } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
+const firebaseApp = getApps().length ? getApp() : initializeApp();
+const firebaseAuth = getAuth(firebaseApp);
 
 // Kod dostępu dla roli nauczyciela (żeby uczeń nie awansował się sam).
 const teacherCodeFromEnv = String(process.env.TEACHER_ACCESS_CODE || '');
@@ -52,7 +54,7 @@ if (teacherCodeFromEnv && !TEACHER_ACCESS_CODE) {
 async function verifyIdToken(idToken) {
     if (!idToken || typeof idToken !== 'string') return null;
     try {
-        return await admin.auth().verifyIdToken(idToken);
+        return await firebaseAuth.verifyIdToken(idToken);
     } catch (e) {
         console.warn('[auth] verifyIdToken failed:', e.message);
         return null;
@@ -793,8 +795,8 @@ io.on('connection', (socket) => {
                 return socket.emit('error_msg', 'Hasło można resetować tylko kontu ucznia.');
             }
             const temp = 'Az!' + crypto.randomBytes(6).toString('base64url');
-            await admin.auth().updateUser(targetUid, { password: temp });
-            await admin.auth().revokeRefreshTokens(targetUid);
+            await firebaseAuth.updateUser(targetUid, { password: temp });
+            await firebaseAuth.revokeRefreshTokens(targetUid);
             socket.emit('member_password_reset', { uid, tempPassword: temp });
         } catch (e) {
             console.error('[reset_member_password] error:', e.message);

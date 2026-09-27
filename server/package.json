@@ -7,7 +7,7 @@
     "start": "node server.js",
     "sync": "node scripts/sync-public.js",
     "check:sync": "node scripts/sync-public.js --check",
-    "test": "node soroban-generator.selftest.js && node scripts/sync-public.js --check && node scripts/smoke-test.js",
+    "test": "node soroban-generator.selftest.js && node scripts/runtime-selftest.js && node scripts/sync-public.js --check && node scripts/smoke-test.js",
     "test:smoke": "node scripts/smoke-test.js",
     "school:license": "node scripts/school-license.js"
   },
