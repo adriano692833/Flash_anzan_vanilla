@@ -7,23 +7,23 @@ const G = require('./soroban-generator.js');
 
 // Tabela odwzorowuje pole `tier` + cyfry + tryb z DEFAULT_KYU (js/app.js).
 const KYU = {
-    20: { d: 1, o: { min: 3, max: 5 }, m: 'add', tier: 'direct' },
-    19: { d: 1, o: { min: 3, max: 5 }, m: 'add', tier: 'direct' },
-    18: { d: 1, o: { min: 3, max: 6 }, m: 'add', tier: 'direct' },
-    17: { d: 1, o: { min: 4, max: 6 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend5' },
-    16: { d: 1, o: { min: 4, max: 6 }, m: 'add', tier: 'friend5' },
-    15: { d: 1, o: { min: 4, max: 7 }, m: 'add', tier: 'friend5' },
-    14: { d: 1, o: { min: 5, max: 7 }, m: 'add', tier: 'friend5' },
+    20: { d: 1, o: { min: 3, max: 5 }, m: 'add', tier: 'direct', range: { min: 1, max: 4 } },
+    19: { d: 1, o: { min: 3, max: 5 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 1, max: 4 } },
+    18: { d: 1, o: { min: 3, max: 6 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 1, max: 5 } },
+    17: { d: 1, o: { min: 4, max: 6 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 5, max: 5 } },
+    16: { d: 1, o: { min: 4, max: 6 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 1, max: 9 } },
+    15: { d: 1, o: { min: 4, max: 7 }, m: 'add', tier: 'friend5', range: { min: 1, max: 9 } },
+    14: { d: 1, o: { min: 5, max: 7 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend5', range: { min: 1, max: 9 } },
     13: { d: 1, o: { min: 5, max: 10 }, m: 'add', tier: 'friend10' },
-    12: { d: 1, o: { min: 5, max: 10 }, m: 'add', tier: 'friend10' },
+    12: { d: 1, o: { min: 5, max: 10 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend10' },
     11: { d: 1, o: { min: 10, max: 15 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend10' },
     10: { d: 2, o: { min: 5, max: 10 }, m: 'add', tier: 'full' },
-    9: { d: 2, o: { min: 5, max: 5 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'full' },
-    8: { d: 3, o: { min: 5, max: 10 }, m: 'add', tier: 'full' },
+    9: { d: 2, o: { min: 5, max: 8 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'full' },
+    8: { d: 3, o: { min: 5, max: 10 }, m: 'add', tier: 'full', range: { min: 10, max: 999 } },
     6: { d: 4, o: { min: 5, max: 10 }, m: 'add', tier: 'full' },
     5: { d: 5, o: { min: 3, max: 7 }, m: 'add', tier: 'full' },
     3: { d: 8, o: { min: 3, max: 5 }, m: 'add', tier: 'full' },
-    1: { d: 8, o: { min: 8, max: 12 }, m: 'add', tier: 'full' }
+    1: { d: 8, o: { min: 8, max: 12 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'full' }
 };
 
 const TIER = G.TIER;
@@ -45,6 +45,15 @@ for (const kyu of Object.keys(KYU)) {
             if (running < 0) { negatives++; break; }
         }
     }
+}
+
+// Jawne zakresy z poziomów i konfiguracji indywidualnych muszą być twardym
+// ograniczeniem, a nie tylko opisem w interfejsie.
+for (let i = 0; i < N; i++) {
+    const basic = G.generateSequence({ d: 1, o: 4, m: 'mixed', tier: 'direct', range: { min: 1, max: 4 } });
+    if (basic.some(term => Math.abs(term) < 1 || Math.abs(term) > 4)) violations++;
+    const custom = G.generateSequence({ d: 3, o: 6, m: 'mixed', tier: 'full', range: { min: 25, max: 240 } });
+    if (custom.some(term => Math.abs(term) < 25 || Math.abs(term) > 240)) violations++;
 }
 
 // Operacje dodatkowe muszą zawsze dawać całkowity, dodatni wynik.

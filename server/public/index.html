@@ -225,7 +225,8 @@
                         <h2 id="game-title" style="margin-bottom: 1.5rem;">Trening</h2>
                         <div class="glass-card" style="text-align: left; margin-bottom: 2rem;">
                             <label class="stat-label">Wybierz poziom</label>
-                            <select id="game-kyu" class="input-lg" style="margin-bottom: 1rem;"></select>
+                            <select id="game-kyu" class="input-lg" style="margin-bottom: 0.5rem;" onchange="app.onTrainingSelectChange('game-kyu')"></select>
+                            <p class="field-help">Wybierz gotowy poziom Kyū albo utwórz własną, nazwaną konfigurację.</p>
 
                             <label class="stat-label">Prędkość (czas wyświetlania)</label>
                             <select id="game-speed" class="input-lg" style="margin-bottom: 1rem;"></select>
@@ -234,6 +235,7 @@
                                 style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; color: var(--text-muted); background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 0.5rem;">
                                 <div>Cyfry: <span id="info-d" style="color:white; font-weight:bold"></span></div>
                                 <div>Liczb: <span id="info-o" style="color:white; font-weight:bold"></span></div>
+                                <div>Zakres: <span id="info-range" style="color:white; font-weight:bold"></span></div>
                                 <div>Czas: <span id="info-t" style="color:white; font-weight:bold"></span>s</div>
                             </div>
                         </div>
@@ -336,7 +338,8 @@
                     <h3>Rozpocznij Test</h3>
                     <div style="margin-bottom: 2rem; text-align: left; max-width: 300px; margin: 0 auto 2rem auto;">
                         <label class="stat-label">Wybierz poziom</label>
-                        <select id="ws-kyu" class="input-lg" style="margin-bottom: 1rem;"></select>
+                        <select id="ws-kyu" class="input-lg" style="margin-bottom: 0.5rem;" onchange="app.onTrainingSelectChange('ws-kyu')"></select>
+                        <p class="field-help">Profile indywidualne mogą mieć osobne zakresy dla arkuszy.</p>
 
                         <label class="stat-label">Operacja</label>
                         <select id="ws-op" class="input-lg">
@@ -388,7 +391,19 @@
                     </div>
                 </div>
 
-                <div class="glass-card">
+                <div class="glass-card custom-presets-card">
+                    <div class="settings-card-heading">
+                        <div>
+                            <span class="eyebrow-label">TRENING INDYWIDUALNY</span>
+                            <h3>Moje konfiguracje</h3>
+                            <p>Własne zakresy dla Flash Anzan, głosowego, arkuszy lub zajęć multiplayer.</p>
+                        </div>
+                        <button class="btn btn-primary" onclick="app.openCustomConfig('all')">＋ Nowa konfiguracja</button>
+                    </div>
+                    <div id="custom-presets-list" class="custom-presets-list"></div>
+                </div>
+
+                <div class="glass-card legacy-kyu-editor" style="display:none">
                     <h3 style="margin-bottom: 1rem; color:var(--secondary)">Edytor Poziomów</h3>
 
                     <div style="margin-bottom: 1.5rem;">
@@ -542,18 +557,8 @@
                                 <label class="stat-label">Klasa</label>
                                 <select id="host-class" class="input-lg" style="margin-bottom:1rem;"></select>
                                 <label class="stat-label">Poziom trudności</label>
-                                <select id="host-kyu" class="input-lg" style="margin-bottom: 1rem;">
-                                    <option value="10">10 Kyu (Początkujący)</option>
-                                    <option value="9">9 Kyu</option>
-                                    <option value="8">8 Kyu</option>
-                                    <option value="7">7 Kyu</option>
-                                    <option value="6">6 Kyu</option>
-                                    <option value="5" selected>5 Kyu (Średni)</option>
-                                    <option value="4">4 Kyu</option>
-                                    <option value="3">3 Kyu</option>
-                                    <option value="2">2 Kyu</option>
-                                    <option value="1">1 Kyu (Zaawansowany)</option>
-                                </select>
+                                <select id="host-kyu" class="input-lg" style="margin-bottom: 0.5rem;" onchange="app.onTrainingSelectChange('host-kyu')"></select>
+                                <p class="field-help">Możesz użyć własnego profilu przygotowanego specjalnie dla zajęć.</p>
                                 <label class="stat-label">Tryb gry</label>
                                 <select id="host-mode" class="input-lg" style="margin-bottom: 1rem;">
                                     <option value="auto">Automatyczny (wszyscy widzą jednocześnie)</option>
@@ -653,6 +658,32 @@
             <div class="mobile-nav-item" onclick="nav('worksheet')">📝</div>
             <div class="mobile-nav-item" onclick="nav('settings')">⚙️</div>
             <div class="mobile-nav-item" onclick="app.auth.logout()" title="Wyloguj">🚪</div>
+        </div>
+    </div>
+
+    <div id="custom-config-modal" class="custom-config-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="custom-config-title">
+        <div class="custom-config-dialog">
+            <div class="custom-config-header">
+                <div>
+                    <span class="eyebrow-label">INDYWIDUALNY</span>
+                    <h2 id="custom-config-title">Nowa konfiguracja treningu</h2>
+                </div>
+                <button class="icon-button" onclick="app.closeCustomConfig()" aria-label="Zamknij">×</button>
+            </div>
+            <div class="custom-config-grid">
+                <label class="custom-field custom-field--wide"><span>Nazwa konfiguracji</span><input id="custom-name" class="input-lg" maxlength="40" placeholder="np. Grupa wtorek — przyjaciele 5"></label>
+                <label class="custom-field"><span>Przeznaczenie</span><select id="custom-game" class="input-lg"><option value="all">Wszystkie tryby</option><option value="flash">Flash Anzan</option><option value="spoken">Trening głosowy</option><option value="worksheet">Arkusze</option><option value="multiplayer">Zajęcia multiplayer</option></select></label>
+                <label class="custom-field"><span>Działanie</span><select id="custom-operation" class="input-lg" onchange="app.updateCustomConfigFields()"><option value="add">Dodawanie</option><option value="mixed">Dodawanie i odejmowanie</option><option value="mul">Mnożenie</option><option value="div">Dzielenie</option></select></label>
+                <label class="custom-field"><span id="custom-range-a-label">Składnik — od</span><input id="custom-range-a-min" type="number" min="1" max="99999999" class="input-lg" value="1"></label>
+                <label class="custom-field"><span id="custom-range-a-max-label">Składnik — do</span><input id="custom-range-a-max" type="number" min="1" max="99999999" class="input-lg" value="9"></label>
+                <label id="custom-range-b-min-field" class="custom-field" style="display:none"><span id="custom-range-b-label">Czynnik B — od</span><input id="custom-range-b-min" type="number" min="1" max="99999999" class="input-lg" value="2"></label>
+                <label id="custom-range-b-max-field" class="custom-field" style="display:none"><span id="custom-range-b-max-label">Czynnik B — do</span><input id="custom-range-b-max" type="number" min="1" max="99999999" class="input-lg" value="9"></label>
+                <label class="custom-field"><span>Liczb w serii</span><input id="custom-terms" type="number" min="2" max="50" class="input-lg" value="5"></label>
+                <label class="custom-field"><span>Czas jednej liczby (s)</span><input id="custom-time" type="number" min="0.1" max="60" step="0.1" class="input-lg" value="2"></label>
+                <label id="custom-tier-field" class="custom-field custom-field--wide"><span>Dozwolona technika sorobanu</span><select id="custom-tier" class="input-lg"><option value="direct">Bezpośrednio — bez przyjaciół</option><option value="friend5">Przyjaciele 5</option><option value="friend10">Przyjaciele 10</option><option value="full">Pełny zakres technik</option></select></label>
+            </div>
+            <p class="custom-config-note">Zakres jest pilnowany przez generator. Wynik dodawania i odejmowania nigdy nie spada poniżej zera.</p>
+            <div class="custom-config-actions"><button class="btn btn-secondary" onclick="app.closeCustomConfig()">Anuluj</button><button class="btn btn-primary" onclick="app.saveCustomConfig()">Zapisz konfigurację</button></div>
         </div>
     </div>
 

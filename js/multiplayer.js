@@ -159,6 +159,12 @@
                 this.studentClassId = (d && d.classId) || '';
                 app.renderProfile(d);
             });
+            s.on('training_presets_saved', (d) => {
+                if (!d || !Array.isArray(d.presets)) return;
+                app.customPresets = app._sanitizeCustomPresets(d.presets);
+                app.save();
+                app.renderKyuSelects();
+            });
             s.on('class_members', (d) => this.renderClassMembers(d.classId, d.members || []));
             s.on('class_report', (d) => this.renderClassReport(d.classId, d.sessions || []));
             s.on('member_password_reset', (d) => {
@@ -423,16 +429,18 @@
 
         createRoom: function () {
             const k = document.getElementById('host-kyu').value;
+            const trainingConfig = app.getTrainingConfig(k);
             const mode = document.getElementById('host-mode').value;
             const classSel = document.getElementById('host-class');
             const classId = classSel ? classSel.value : '';
 
             if (this.myRole !== 'teacher') return app.ui.toast('Tylko nauczyciel może utworzyć pokój.', 'warning');
             if (!classId) return app.ui.toast('Wybierz klasę dla pokoju.', 'warning');
+            if (!trainingConfig) return app.ui.toast('Wybierz poziom lub zapisaną konfigurację.', 'warning');
 
             this.init();
             // Tożsamość/rola już zarejestrowane przez authenticate(); wysyłamy sam pokój.
-            this.socket.emit('create_room', { config: app.kyu[k], mode, classId });
+            this.socket.emit('create_room', { config: trainingConfig, mode, classId });
         },
 
         createSchool: function () {
@@ -639,7 +647,8 @@
             }).join('');
             const recentRows = sessions.slice(0, 10).map(session => {
                 const date = new Date(Number(session.startedAt) || Date.now()).toLocaleString('pl-PL');
-                return `<tr><td>${he(date)}</td><td>${session.kyuId ? he(session.kyuId + ' Kyu') : '—'}</td><td>${Number(session.taskCount) || 0}</td><td>${Number(session.studentCount) || 0}</td></tr>`;
+                const training = session.trainingName || (session.kyuId ? session.kyuId + ' Kyū' : '—');
+                return `<tr><td>${he(date)}</td><td>${he(training)}</td><td>${Number(session.taskCount) || 0}</td><td>${Number(session.studentCount) || 0}</td></tr>`;
             }).join('');
             box.innerHTML = `
                 <div class="report-panel">

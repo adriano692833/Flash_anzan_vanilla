@@ -714,6 +714,177 @@ input[type=number] {
 .mode-card--multi .mode-icon { background: rgba(117, 145, 196, 0.16); color: #9fb8e5; }
 .mode-card--sheet .mode-icon { background: rgba(242, 223, 187, 0.1); color: var(--paper); }
 
+.field-help {
+    margin: 0 0 1rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+.settings-card-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+}
+
+.settings-card-heading h3 {
+    margin-top: 0.25rem;
+    font-size: 1.45rem;
+}
+
+.settings-card-heading p {
+    max-width: 620px;
+    margin-top: 0.4rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.eyebrow-label {
+    color: var(--primary);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+}
+
+.custom-presets-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+.custom-preset-card {
+    padding: 1rem;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: rgba(7, 20, 38, 0.45);
+}
+
+.custom-preset-card-header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.custom-preset-card h4 {
+    font-size: 1rem;
+}
+
+.custom-preset-card p {
+    margin-top: 0.45rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+.custom-preset-actions {
+    display: flex;
+    gap: 0.45rem;
+    margin-top: 0.8rem;
+}
+
+.custom-preset-actions .btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.78rem;
+}
+
+.preset-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    color: var(--secondary);
+    background: rgba(215, 169, 75, 0.1);
+    font-size: 0.65rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.custom-config-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    padding: 1rem;
+    align-items: center;
+    justify-content: center;
+    overflow-y: auto;
+    background: rgba(2, 10, 22, 0.78);
+    backdrop-filter: blur(12px);
+}
+
+.custom-config-dialog {
+    width: min(760px, 100%);
+    margin: auto;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border: 1px solid var(--glass-border);
+    border-top: 3px solid var(--primary);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(145deg, #17375f, #0a1b33);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+}
+
+.custom-config-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.custom-config-header h2 {
+    margin-top: 0.3rem;
+}
+
+.icon-button {
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--glass-border);
+    border-radius: 50%;
+    color: var(--text-main);
+    background: rgba(7, 20, 38, 0.5);
+    font-size: 1.55rem;
+    cursor: pointer;
+}
+
+.custom-config-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.custom-field {
+    display: block;
+}
+
+.custom-field--wide {
+    grid-column: 1 / -1;
+}
+
+.custom-field > span {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: #dce5ee;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.custom-config-note {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border-left: 2px solid var(--secondary);
+    color: var(--text-muted);
+    background: rgba(7, 20, 38, 0.34);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.custom-config-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
 /* Aplikacja startuje ukryta i odslania sie dopiero po zalogowaniu. */
 .app-container.is-locked {
     display: none;

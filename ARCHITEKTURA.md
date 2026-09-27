@@ -15,7 +15,8 @@ dane w Firestore. To najtańszy rozsądny wariant dla produktu na etapie pierwsz
 
 ## Model danych
 
-- `users/{uid}` — profil i jawna rola `school_admin`, `teacher` albo `student`, szkoła, XP i bieżąca klasa.
+- `users/{uid}` — profil i jawna rola `school_admin`, `teacher` albo `student`, szkoła, XP, bieżąca klasa
+  oraz maksymalnie 25 nazwanych konfiguracji treningu (`trainingPresets`).
 - `schools/{schoolId}` — właściciel, plan, status licencji i rotowany kod zaproszenia nauczycieli.
 - `classes/{classId}` — szkoła, nauczyciel założyciel, rok, kod dołączenia i status.
 - `classes/{classId}/members/{uid}` — uczeń, punkty i ostatnia aktywność.

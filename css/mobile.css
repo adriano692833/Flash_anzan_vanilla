@@ -121,6 +121,26 @@
         margin: 0;
     }
 
+    .settings-card-heading {
+        flex-direction: column;
+    }
+
+    .settings-card-heading .btn {
+        width: 100%;
+    }
+
+    .custom-config-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .custom-field--wide {
+        grid-column: auto;
+    }
+
+    .custom-config-actions {
+        flex-direction: column-reverse;
+    }
+
     /* Adjust huge numbers */
     .number-display {
         font-size: 6rem;

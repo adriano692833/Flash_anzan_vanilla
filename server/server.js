@@ -10,6 +10,7 @@ const { Server } = require('socket.io');
 const {
     registerUser,
     getUser,
+    updateTrainingPresets,
     createClass,
     getClass,
     findClassByJoinCode,
@@ -169,6 +170,12 @@ function validateConfig(config) {
     if (!config || typeof config !== 'object') return {};
     const safe = {};
 
+    const presetName = sanitizeLabel(config.presetName || config.name, 40);
+    if (presetName) {
+        safe.name = presetName;
+        safe.presetName = presetName;
+    }
+
     if (config.id != null) safe.id = clampInt(config.id, 1, 20, 20);
 
     // d: digits — number 1–9 or {min,max}
@@ -247,6 +254,21 @@ function validateConfig(config) {
     }
 
     return safe;
+}
+
+const ALLOWED_PRESET_GAMES = new Set(['all', 'flash', 'spoken', 'worksheet', 'multiplayer']);
+function validateTrainingPresets(presets) {
+    if (!Array.isArray(presets)) return [];
+    return presets.slice(0, 25).map((preset, index) => {
+        const name = sanitizeLabel(preset && preset.name, 40) || `Konfiguracja ${index + 1}`;
+        const rawId = String((preset && preset.id) || `preset_${index}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60);
+        return {
+            id: rawId || `preset_${index}`,
+            name,
+            game: ALLOWED_PRESET_GAMES.has(preset && preset.game) ? preset.game : 'all',
+            config: validateConfig({ ...((preset && preset.config) || {}), presetName: name })
+        };
+    });
 }
 
 // --- Helper functions ---
@@ -363,6 +385,7 @@ function persistSession(room, reason) {
         teacherUid: room.hostUid,
         teacherName: room.hostName,
         kyuId: room.config?.id || null,
+        trainingName: room.config?.presetName || room.config?.name || '',
         roomMode: room.mode,
         startedAt: room.startedAt,
         endedAt: Date.now(),
@@ -1281,6 +1304,7 @@ io.on('connection', (socket) => {
                 totalXp: (user && user.totalXp) || 0,
                 soloXp: (user && user.soloXp) || 0,
                 history: (user && user.history) || {},
+                trainingPresets: (user && user.trainingPresets) || [],
                 classId: cls ? cls.id : '',
                 className: cls ? cls.name : '',
                 classPoints: cls ? cls.points : 0
@@ -1288,6 +1312,19 @@ io.on('connection', (socket) => {
         } catch (e) {
             console.error('[request_profile] error:', e.message);
             socket.emit('error_msg', 'Nie udało się wczytać profilu.');
+        }
+    });
+
+    socket.on('save_training_presets', async (data) => {
+        if (!checkRateLimit(socket.id, 'save_training_presets', 10, 60000)) return;
+        if (!requireAuth()) return;
+        try {
+            const presets = validateTrainingPresets(data && data.presets);
+            await updateTrainingPresets(socket.uid, presets);
+            socket.emit('training_presets_saved', { presets });
+        } catch (e) {
+            console.error('[save_training_presets] error:', e.message);
+            socket.emit('error_msg', 'Nie udało się zapisać konfiguracji treningu.');
         }
     });
 

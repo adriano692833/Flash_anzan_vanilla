@@ -144,8 +144,13 @@
         const multiDigit = digits >= 2;
         const allowSub = (cfg.m === 'mixed') || (cfg.ops && cfg.ops.sub);
 
-        const termMin = multiDigit ? Math.pow(10, digits - 1) : 1;
-        const termMax = Math.pow(10, digits) - 1;
+        // Jawny zakres ma pierwszeństwo przed skrótem `d`. Dzięki temu profile
+        // Kyū i konfiguracje indywidualne naprawdę respektują swoje granice.
+        const hasRange = cfg.range && Number.isFinite(Number(cfg.range.min)) && Number.isFinite(Number(cfg.range.max));
+        const defaultMin = multiDigit ? Math.pow(10, digits - 1) : 1;
+        const defaultMax = Math.pow(10, digits) - 1;
+        const termMin = hasRange ? Math.max(1, Math.floor(Number(cfg.range.min))) : defaultMin;
+        const termMax = hasRange ? Math.max(termMin, Math.floor(Number(cfg.range.max))) : defaultMax;
 
         // Poziomy jednorzędowe (direct/friend5) NIE dopuszczają przeniesienia,
         // więc suma nie przekracza 9. Budżetujemy dodawanie tak, by dla każdego
@@ -170,10 +175,10 @@
                 }
             } else {
                 const ops = (!firstStep && allowSub) ? ['+', '-'] : ['+'];
-                for (let d = 1; d <= termMax; d++) {
+                for (let d = termMin; d <= termMax; d++) {
                     for (let k = 0; k < ops.length; k++) {
                         const op = ops[k];
-                        if (cappedSingleRod && op === '+' && total + d > 9 - left) continue;
+                        if (cappedSingleRod && !allowSub && op === '+' && total + d > 9 - (left * termMin)) continue;
                         const res = applyTerm(rods, d, op);
                         if (!res.ok || res.tier > tierLimit) continue;
                         add(d, op, res);

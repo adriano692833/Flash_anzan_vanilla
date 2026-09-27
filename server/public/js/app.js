@@ -51,36 +51,36 @@ const DEFAULT_KYU = {
     //   direct   (bezpośrednie), friend5 (przyjaciele 5, bez przeniesienia),
     //   friend10 (przyjaciele 10, z przeniesieniem), full (wielocyfrowe mitori-zan).
     // Na poziomach jednorzędowych (direct/friend5) suma ≤ 9, więc 'o' jest mniejsze.
-    20: { id: 20, name: "20 Kyu", category: "basic_introduction", tier: "direct", d: 1, o: { min: 3, max: 5 }, t: 8.0, m: 'add', max: 0, ops: { add: true }, range: { min: 1, max: 4 }, techniques: ["basic_counting"] },
-    19: { id: 19, name: "19 Kyu", category: "basic", tier: "direct", d: 1, o: { min: 3, max: 5 }, t: 7.0, m: 'add', max: 0, ops: { add: true }, range: { min: 1, max: 4 }, techniques: ["basic_counting"] },
-    18: { id: 18, name: "18 Kyu", category: "number_5_intro", tier: "direct", d: 1, o: { min: 3, max: 6 }, t: 6.0, m: 'add', max: 0, ops: { add: true }, range: { min: 1, max: 5 }, techniques: ["basic_counting", "number_5"] },
-    17: { id: 17, name: "17 Kyu", category: "rule_5_basic", tier: "friend5", d: 1, o: { min: 4, max: 6 }, t: 5.0, m: 'mixed', max: 0, ops: { add: true, sub: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5_basic"] },
-    16: { id: 16, name: "16 Kyu", category: "rule_5_consolidation", tier: "friend5", d: 1, o: { min: 4, max: 6 }, t: 4.5, m: 'add', max: 0, ops: { add: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5"] },
-    15: { id: 15, name: "15 Kyu", category: "single_digit_full", tier: "friend5", d: 1, o: { min: 4, max: 7 }, t: 4.0, m: 'add', max: 0, ops: { add: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5"] },
-    14: { id: 14, name: "14 Kyu", category: "rule_5_master", tier: "friend5", d: 1, o: { min: 5, max: 7 }, t: 3.5, m: 'add', max: 0, ops: { add: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5_advanced"] },
-    13: { id: 13, name: "13 Kyu", category: "rule_10_intro_1", tier: "friend10", d: 1, o: { min: 5, max: 10 }, t: 3.0, m: 'add', max: 0, ops: { add: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5", "rule_of_10_basic"] },
-    12: { id: 12, name: "12 Kyu", category: "rule_10_intro_2", tier: "friend10", d: 1, o: { min: 5, max: 10 }, t: 2.5, m: 'add', max: 0, ops: { add: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5", "rule_of_10_basic"] },
-    11: { id: 11, name: "11 Kyu", category: "single_digit_mixed", tier: "friend10", d: 1, o: { min: 10, max: 15 }, t: 2.0, m: 'mixed', max: 0, ops: { add: true, sub: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_10"] },
-    10: { id: 10, name: "10 Kyu", category: "two_digit_1", tier: "full", d: 2, o: { min: 5, max: 10 }, t: 1.8, m: 'add', max: 0, ops: { add: true }, range: { min: 10, max: 99 }, techniques: ["rule_of_10"] },
-    9: { id: 9, name: "9 Kyu", category: "two_digit_2", tier: "full", d: 2, o: { min: 5, max: 5 }, t: 1.6, m: 'mixed', max: 0, ops: { add: true, sub: true }, range: { min: 10, max: 99 }, techniques: ["rule_of_10"], mul: { a: { min: 10, max: 99 }, b: { min: 2, max: 9 } }, div: { divisor: { min: 2, max: 9 }, quotient: { min: 1, max: 9 } } },
-    8: { id: 8, name: "8 Kyu", category: "three_digit_1", tier: "full", d: 3, o: { min: 5, max: 10 }, t: 1.4, m: 'add', max: 0, ops: { add: true }, range: { min: 100, max: 999 }, techniques: ["rule_of_10"] },
-    7: { id: 7, name: "7 Kyu", category: "three_digit_2", tier: "full", d: 3, o: { min: 5, max: 10 }, t: 1.2, m: 'add', max: 0, ops: { add: true }, range: { min: 100, max: 999 }, techniques: ["rule_of_10"] },
-    6: { id: 6, name: "6 Kyu", category: "four_digit", tier: "full", d: 4, o: { min: 5, max: 10 }, t: 1.0, m: 'add', max: 0, ops: { add: true }, range: { min: 1000, max: 9999 }, techniques: ["rule_of_10"] },
-    5: { id: 5, name: "5 Kyu", category: "five_digit", tier: "full", d: 5, o: { min: 3, max: 7 }, t: 0.9, m: 'add', max: 0, ops: { add: true }, range: { min: 10000, max: 99999 }, techniques: ["rule_of_10"] },
-    4: { id: 4, name: "4 Kyu", category: "six_digit", tier: "full", d: 6, o: { min: 3, max: 7 }, t: 0.8, m: 'add', max: 0, ops: { add: true }, range: { min: 100000, max: 999999 }, techniques: ["rule_of_10"] },
-    3: { id: 3, name: "3 Kyu", category: "eight_digit", tier: "full", d: 8, o: { min: 3, max: 5 }, t: 0.7, m: 'add', max: 0, ops: { add: true }, range: { min: 10000000, max: 99999999 }, techniques: ["rule_of_10"] },
-    2: { id: 2, name: "2 Kyu", category: "eight_digit_long", tier: "full", d: 8, o: { min: 5, max: 8 }, t: 0.5, m: 'add', max: 0, ops: { add: true }, range: { min: 10000000, max: 99999999 }, techniques: ["rule_of_10"] },
-    1: { id: 1, name: "1 Kyu", category: "master", tier: "full", d: 8, o: { min: 8, max: 12 }, t: 0.3, m: 'add', max: 0, ops: { add: true }, range: { min: 10000000, max: 99999999 }, techniques: ["rule_of_10"] }
+    20: { id: 20, name: "20 Kyū · 1–4 bezpośrednio", category: "basic_introduction", tier: "direct", d: 1, o: { min: 3, max: 5 }, t: 8.0, m: 'add', ops: { add: true }, range: { min: 1, max: 4 }, techniques: ["basic_counting"] },
+    19: { id: 19, name: "19 Kyū · 1–4 dodawanie i odejmowanie", category: "basic", tier: "direct", d: 1, o: { min: 3, max: 5 }, t: 7.0, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 4 }, techniques: ["basic_counting"] },
+    18: { id: 18, name: "18 Kyū · wprowadzenie liczby 5", category: "number_5_intro", tier: "direct", d: 1, o: { min: 3, max: 6 }, t: 6.0, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 5 }, techniques: ["basic_counting", "number_5"] },
+    17: { id: 17, name: "17 Kyū · +5 / −5", category: "rule_5_basic", tier: "direct", d: 1, o: { min: 4, max: 6 }, t: 5.0, m: 'mixed', ops: { add: true, sub: true }, range: { min: 5, max: 5 }, techniques: ["number_5"] },
+    16: { id: 16, name: "16 Kyū · 1–9 bezpośrednio", category: "rule_5_consolidation", tier: "direct", d: 1, o: { min: 4, max: 6 }, t: 4.5, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 9 }, techniques: ["basic_counting"] },
+    15: { id: 15, name: "15 Kyū · pełne 1–9", category: "single_digit_full", tier: "friend5", d: 1, o: { min: 4, max: 7 }, t: 4.0, m: 'add', ops: { add: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5"] },
+    14: { id: 14, name: "14 Kyū · przyjaciele 5", category: "rule_5_master", tier: "friend5", d: 1, o: { min: 5, max: 7 }, t: 3.5, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5_advanced"] },
+    13: { id: 13, name: "13 Kyū · przyjaciele 10 (+)", category: "rule_10_intro_1", tier: "friend10", d: 1, o: { min: 5, max: 10 }, t: 3.0, m: 'add', ops: { add: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5", "rule_of_10_basic"] },
+    12: { id: 12, name: "12 Kyū · przyjaciele 10 (+/−)", category: "rule_10_intro_2", tier: "friend10", d: 1, o: { min: 5, max: 10 }, t: 2.5, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_10"] },
+    11: { id: 11, name: "11 Kyū · 1 cyfra, seria mieszana", category: "single_digit_mixed", tier: "friend10", d: 1, o: { min: 10, max: 15 }, t: 2.0, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_10"] },
+    10: { id: 10, name: "10 Kyū · 2 cyfry", category: "two_digit_1", tier: "full", d: 2, o: { min: 5, max: 10 }, t: 1.8, m: 'add', ops: { add: true }, range: { min: 10, max: 99 }, techniques: ["rule_of_10"] },
+    9: { id: 9, name: "9 Kyū · 2 cyfry (+/−)", category: "two_digit_2", tier: "full", d: 2, o: { min: 5, max: 8 }, t: 1.6, m: 'mixed', ops: { add: true, sub: true }, range: { min: 10, max: 99 }, techniques: ["rule_of_10"] },
+    8: { id: 8, name: "8 Kyū · 2–3 cyfry", category: "mixed_2_3_digits", tier: "full", d: 3, o: { min: 5, max: 10 }, t: 1.4, m: 'add', ops: { add: true }, range: { min: 10, max: 999 }, techniques: ["rule_of_10"] },
+    7: { id: 7, name: "7 Kyū · 3 cyfry (+/−)", category: "three_digit_2", tier: "full", d: 3, o: { min: 5, max: 10 }, t: 1.2, m: 'mixed', ops: { add: true, sub: true }, range: { min: 100, max: 999 }, techniques: ["rule_of_10"] },
+    6: { id: 6, name: "6 Kyū · 3–4 cyfry", category: "four_digit", tier: "full", d: 4, o: { min: 5, max: 10 }, t: 1.0, m: 'add', ops: { add: true }, range: { min: 100, max: 9999 }, techniques: ["rule_of_10"] },
+    5: { id: 5, name: "5 Kyū · 5 cyfr", category: "five_digit", tier: "full", d: 5, o: { min: 3, max: 7 }, t: 0.9, m: 'add', ops: { add: true }, range: { min: 10000, max: 99999 }, techniques: ["rule_of_10"] },
+    4: { id: 4, name: "4 Kyū · 6–7 cyfr", category: "six_seven_digit", tier: "full", d: 7, o: { min: 3, max: 7 }, t: 0.8, m: 'add', ops: { add: true }, range: { min: 100000, max: 9999999 }, techniques: ["rule_of_10"] },
+    3: { id: 3, name: "3 Kyū · 8 cyfr", category: "eight_digit", tier: "full", d: 8, o: { min: 3, max: 5 }, t: 0.7, m: 'add', ops: { add: true }, range: { min: 10000000, max: 99999999 }, techniques: ["rule_of_10"] },
+    2: { id: 2, name: "2 Kyū · 8 cyfr, długa seria", category: "eight_digit_long", tier: "full", d: 8, o: { min: 5, max: 8 }, t: 0.5, m: 'add', ops: { add: true }, range: { min: 10000000, max: 99999999 }, techniques: ["rule_of_10"] },
+    1: { id: 1, name: "1 Kyū · mistrzowski", category: "master", tier: "full", d: 8, o: { min: 8, max: 12 }, t: 0.3, m: 'mixed', ops: { add: true, sub: true }, range: { min: 10000000, max: 99999999 }, techniques: ["rule_of_10"] }
 };
 
 // Wersja drabinki kyū. Podbij przy zmianie DEFAULT_KYU, aby istniejący
 // użytkownicy (z configiem w localStorage) dostali nową drabinkę.
-const KYU_VERSION = 4;
+const KYU_VERSION = 5;
 
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '6.3 Flash Anzan';
+const APP_VERSION = '6.4 Flash Anzan';
 const APP_UPDATED = '2026-09-27';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -113,6 +113,7 @@ function createEmitter() {
 
 const app = {
     kyu: null,
+    customPresets: [],
     user: { xp: 0, level: 1, streak: 0, settings: { sound: true, wsTime: 5 } },
     state: { mode: '', nums: [], sum: null, idx: 0, timer: null, wsExp: [], checked: false },
 
@@ -157,6 +158,7 @@ const app = {
                 this.user = Object.assign({}, this.user, d.user);
                 this.user.settings = Object.assign({ sound: true, wsTime: 5 }, this.user.settings || {});
                 this.kyu = d.kyu || JSON.parse(JSON.stringify(DEFAULT_KYU));
+                this.customPresets = this._sanitizeCustomPresets(d.customPresets || []);
 
                 // Migracja: sprawdź czy mamy nowy system (np. czy istnieje poziom 20)
                 // lub czy drabinka jest nieaktualna (KYU_VERSION). Reset configu poziomów,
@@ -171,11 +173,13 @@ const app = {
                 if (!this.user.achievements) this.user.achievements = [];
             } else {
                 this.kyu = JSON.parse(JSON.stringify(DEFAULT_KYU));
+                this.customPresets = [];
                 this.user.history = {};
                 this.user.achievements = [];
             }
         } else {
             this.kyu = JSON.parse(JSON.stringify(DEFAULT_KYU));
+            this.customPresets = [];
             this.user.history = {};
             this.user.achievements = [];
         }
@@ -242,14 +246,14 @@ const app = {
         const today = new Date().toISOString().split('T')[0];
         this.user.history[today] = this.user.xp;
 
-        const d = { user: this.user, kyu: this.kyu, kyuVersion: KYU_VERSION };
+        const d = { user: this.user, kyu: this.kyu, kyuVersion: KYU_VERSION, customPresets: this.customPresets };
         localStorage.setItem('anzan_v3_user', JSON.stringify(d));
         this.updateUI();
         this.updateAchievementsUI(); // Sprawdź odznaki przy zapisie
     },
 
     exportData: function () {
-        const data = JSON.stringify({ user: this.user, kyu: this.kyu });
+        const data = JSON.stringify({ user: this.user, kyu: this.kyu, customPresets: this.customPresets });
         const blob = new Blob([data], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url; a.download = 'anzan_backup_' + new Date().toISOString().split('T')[0] + '.json';
@@ -264,6 +268,7 @@ const app = {
                 const d = JSON.parse(e.target.result);
                 if (d.user && d.kyu) {
                     this.user = d.user; this.kyu = d.kyu;
+                    this.customPresets = this._sanitizeCustomPresets(d.customPresets || []);
                     this.save();
                     app.ui.toast('Dane zaimportowane pomyślnie!', 'success');
                     location.reload();
@@ -329,7 +334,11 @@ const app = {
             kId = this.state.survivalLevel || 20; // Default to 20 Kyu
         }
 
-        const cfg = this.kyu[kId];
+        const cfg = this.getTrainingConfig(kId);
+        if (!cfg) {
+            app.ui.toast('Wybierz poziom lub zapisaną konfigurację.', 'warning');
+            return;
+        }
         // const noNeg = cfg.noNeg === undefined ? true : cfg.noNeg; // Handled internally now
 
         // Prędkość flash — osobna oś, sterowana suwakiem tylko przy starcie z lokalnego
@@ -625,14 +634,16 @@ const app = {
     // w KOPII configu, nie psując zapisanego poziomu). Pusta operacja = wg poziomu.
     _wsConfig: function () {
         const kId = document.getElementById('ws-kyu').value;
-        const base = this.kyu[kId];
+        const base = this.getTrainingConfig(kId);
+        if (!base) return { kId: kId, label: '', cfg: null };
         const opEl = document.getElementById('ws-op');
         const op = opEl ? opEl.value : '';
         const cfg = op ? Object.assign({}, base, { m: op }) : base;
-        return { kId: kId, cfg: cfg };
+        return { kId: kId, label: this.trainingLabel(kId), cfg: cfg };
     },
     startWorksheet: function () {
         const { kId, cfg } = this._wsConfig();
+        if (!cfg) return app.ui.toast('Wybierz poziom lub zapisaną konfigurację.', 'warning');
         const noNeg = cfg.noNeg === undefined ? true : cfg.noNeg;
 
         // FIX: Ukryj inne ekrany, pokaż worksheet
@@ -743,7 +754,8 @@ const app = {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
 
-        const { kId, cfg } = this._wsConfig();
+        const { kId, label, cfg } = this._wsConfig();
+        if (!cfg) return app.ui.toast('Wybierz poziom lub zapisaną konfigurację.', 'warning');
         const count = parseInt(document.getElementById('pdf-count').value) || 1;
 
         app.ui.toast(`Generowanie ${count} stron PDF...`, 'info');
@@ -754,7 +766,7 @@ const app = {
             if (p > 0) doc.addPage();
 
             doc.setFontSize(18);
-            doc.text(`Arkusz ${p + 1} - Trening ${kId} Kyu`, 105, 15, { align: 'center' });
+            doc.text(`Arkusz ${p + 1} - ${label}`, 105, 15, { align: 'center' });
             doc.setFontSize(10);
             doc.text(`Data: ....................   Imie: ........................................   Wynik: ........ / 20`, 105, 25, { align: 'center' });
 
@@ -826,7 +838,7 @@ const app = {
         doc.setFontSize(18);
         doc.text("Klucz Odpowiedzi (Answer Key)", 105, 15, { align: 'center' });
         doc.setFontSize(10);
-        doc.text(`Poziom: ${kId} Kyu`, 105, 22, { align: 'center' });
+        doc.text(`Poziom: ${label}`, 105, 22, { align: 'center' });
 
         let currentY = 30;
         for (let p = 0; p < count; p++) {
@@ -900,27 +912,275 @@ const app = {
             doc.setTextColor(0);
         }
 
-        doc.save(`anzan_arkusz_${kId}kyu_${new Date().toISOString().slice(0, 10)}.pdf`);
+        const safeFileLabel = String(label).replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40);
+        doc.save(`anzan_arkusz_${safeFileLabel}_${new Date().toISOString().slice(0, 10)}.pdf`);
         app.ui.toast('Pobrano plik PDF!', 'success');
     },
 
     // --- UTILS ---
     renderKyuSelects: function () {
-        const h = Object.keys(this.kyu).sort((a, b) => b - a).map(k => `<option value="${k}">${k} Kyū</option>`).join('');
-        document.getElementById('game-kyu').innerHTML = h;
-        document.getElementById('ws-kyu').innerHTML = h;
-        document.getElementById('edit-kyu-select').innerHTML = h;
+        this._renderTrainingSelect('game-kyu', this.state.mode === 'spoken' ? 'spoken' : 'flash');
+        this._renderTrainingSelect('ws-kyu', 'worksheet');
+        this._renderTrainingSelect('host-kyu', 'multiplayer');
+
+        // Stary edytor jest ukryty, ale pozostawiamy jego pola dla zgodności
+        // importów danych z poprzednich wersji aplikacji.
+        const edit = document.getElementById('edit-kyu-select');
+        if (edit) edit.innerHTML = Object.keys(this.kyu).sort((a, b) => b - a)
+            .map(k => `<option value="${k}">${this._escapeHtml(this.kyu[k].name || (k + ' Kyū'))}</option>`).join('');
 
         // Prędkość flash — osobna oś, niezależna od poziomu (jak w soroban-schule)
         const sp = document.getElementById('game-speed');
         if (sp) sp.innerHTML = FLASH_SPEEDS.map(v => `<option value="${v.toFixed(1)}">${v.toFixed(1)} s</option>`).join('');
+
+        this.renderCustomPresets();
+    },
+    _escapeHtml: function (value) {
+        const chars = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return String(value == null ? '' : value).replace(/[&<>"']/g, ch => chars[ch]);
+    },
+    _sanitizeCustomPresets: function (presets) {
+        if (!Array.isArray(presets)) return [];
+        const games = new Set(['all', 'flash', 'spoken', 'worksheet', 'multiplayer']);
+        const operations = new Set(['add', 'mixed', 'mul', 'div']);
+        const tiers = new Set(['direct', 'friend5', 'friend10', 'full']);
+        const clamp = (value, min, max, fallback) => {
+            const n = Number(value);
+            return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+        };
+        const range = (value, fallbackMin, fallbackMax) => {
+            const min = Math.floor(clamp(value && value.min, 1, 99999999, fallbackMin));
+            const max = Math.floor(clamp(value && value.max, min, 99999999, fallbackMax));
+            return { min, max };
+        };
+        return presets.slice(0, 25).map((preset, index) => {
+            const raw = preset && typeof preset === 'object' ? preset : {};
+            const source = raw.config && typeof raw.config === 'object' ? raw.config : {};
+            const name = String(raw.name || source.name || `Konfiguracja ${index + 1}`).trim().slice(0, 40);
+            const id = String(raw.id || `preset_${Date.now()}_${index}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60);
+            const operation = operations.has(source.m) ? source.m : 'add';
+            const tier = tiers.has(source.tier) ? source.tier : 'full';
+            const config = {
+                name,
+                presetName: name,
+                category: '',
+                tier,
+                d: Math.floor(clamp(source.d, 1, 8, 1)),
+                o: Math.floor(clamp(source.o, 2, 50, 5)),
+                t: clamp(source.t, 0.1, 60, 2),
+                m: operation,
+                ops: { add: operation !== 'div' && operation !== 'mul', sub: operation === 'mixed' }
+            };
+            if (operation === 'mul') {
+                config.mul = { a: range(source.mul && source.mul.a, 1, 9), b: range(source.mul && source.mul.b, 2, 9) };
+            } else if (operation === 'div') {
+                config.div = { divisor: range(source.div && source.div.divisor, 2, 9), quotient: range(source.div && source.div.quotient, 1, 9) };
+            } else {
+                config.range = range(source.range, 1, 9);
+            }
+            return { id: id || `preset_${Date.now()}_${index}`, name, game: games.has(raw.game) ? raw.game : 'all', config };
+        });
+    },
+    _renderTrainingSelect: function (selectId, target) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        const previous = select.value || select.dataset.lastValue || '20';
+        const presets = this.customPresets.filter(item => item.game === 'all' || item.game === target);
+        const customOptions = presets.map(item => `<option value="custom:${item.id}">★ ${this._escapeHtml(item.name)}</option>`).join('');
+        const standardOptions = Object.keys(this.kyu).filter(k => /^\d+$/.test(k)).sort((a, b) => b - a)
+            .map(k => `<option value="${k}">${this._escapeHtml(this.kyu[k].name || (k + ' Kyū'))}</option>`).join('');
+        select.innerHTML = `<option value="__new__">＋ Indywidualny — utwórz własny</option>`
+            + (customOptions ? `<optgroup label="Moje konfiguracje">${customOptions}</optgroup>` : '')
+            + `<optgroup label="Standard Kyū">${standardOptions}</optgroup>`;
+        const canRestore = Array.from(select.options).some(option => option.value === previous);
+        select.value = canRestore ? previous : '20';
+        select.dataset.lastValue = select.value;
+    },
+    _targetForSelect: function (selectId) {
+        if (selectId === 'ws-kyu') return 'worksheet';
+        if (selectId === 'host-kyu') return 'multiplayer';
+        return this.state.mode === 'spoken' ? 'spoken' : 'flash';
+    },
+    onTrainingSelectChange: function (selectId) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        if (select.value === '__new__') {
+            select.value = select.dataset.lastValue || '20';
+            this.openCustomConfig(this._targetForSelect(selectId), selectId);
+            return;
+        }
+        select.dataset.lastValue = select.value;
+        if (selectId === 'game-kyu') this.updateGameInfo();
+    },
+    getTrainingConfig: function (selection) {
+        if (String(selection).startsWith('custom:')) {
+            const id = String(selection).slice(7);
+            const preset = this.customPresets.find(item => item.id === id);
+            return preset ? preset.config : null;
+        }
+        return this.kyu[selection] || null;
+    },
+    trainingLabel: function (selection) {
+        if (String(selection).startsWith('custom:')) {
+            const preset = this.customPresets.find(item => item.id === String(selection).slice(7));
+            return preset ? preset.name : 'Konfiguracja indywidualna';
+        }
+        const cfg = this.kyu[selection];
+        return cfg ? (cfg.name || `${selection} Kyū`) : 'Trening';
+    },
+    openCustomConfig: function (target, selectId, presetId) {
+        const preset = presetId ? this.customPresets.find(item => item.id === presetId) : null;
+        this._editingPresetId = preset ? preset.id : '';
+        this._customTargetSelectId = selectId || '';
+        const config = preset ? preset.config : null;
+        const set = (id, value) => { const el = document.getElementById(id); if (el) el.value = value; };
+        set('custom-name', preset ? preset.name : '');
+        set('custom-game', preset ? preset.game : (target || 'all'));
+        set('custom-operation', config ? config.m : 'add');
+        set('custom-terms', config ? (typeof config.o === 'object' ? config.o.max : config.o) : 5);
+        set('custom-time', config ? config.t : 2);
+        set('custom-tier', config ? config.tier : 'full');
+
+        if (config && config.m === 'mul') {
+            set('custom-range-a-min', config.mul.a.min); set('custom-range-a-max', config.mul.a.max);
+            set('custom-range-b-min', config.mul.b.min); set('custom-range-b-max', config.mul.b.max);
+        } else if (config && config.m === 'div') {
+            set('custom-range-a-min', config.div.divisor.min); set('custom-range-a-max', config.div.divisor.max);
+            set('custom-range-b-min', config.div.quotient.min); set('custom-range-b-max', config.div.quotient.max);
+        } else {
+            set('custom-range-a-min', config && config.range ? config.range.min : 1);
+            set('custom-range-a-max', config && config.range ? config.range.max : 9);
+            set('custom-range-b-min', 2); set('custom-range-b-max', 9);
+        }
+        this.updateCustomConfigFields();
+        const modal = document.getElementById('custom-config-modal');
+        if (modal) modal.style.display = 'flex';
+        setTimeout(() => document.getElementById('custom-name')?.focus(), 0);
+    },
+    closeCustomConfig: function () {
+        const modal = document.getElementById('custom-config-modal');
+        if (modal) modal.style.display = 'none';
+        this._editingPresetId = '';
+        this._customTargetSelectId = '';
+    },
+    updateCustomConfigFields: function () {
+        const operation = document.getElementById('custom-operation')?.value || 'add';
+        const hasSecondRange = operation === 'mul' || operation === 'div';
+        const setText = (id, text) => { const el = document.getElementById(id); if (el) el.innerText = text; };
+        const setDisplay = (id, visible) => { const el = document.getElementById(id); if (el) el.style.display = visible ? 'block' : 'none'; };
+        setDisplay('custom-range-b-min-field', hasSecondRange);
+        setDisplay('custom-range-b-max-field', hasSecondRange);
+        setDisplay('custom-tier-field', !hasSecondRange);
+        if (operation === 'mul') {
+            setText('custom-range-a-label', 'Czynnik A — od'); setText('custom-range-a-max-label', 'Czynnik A — do');
+            setText('custom-range-b-label', 'Czynnik B — od'); setText('custom-range-b-max-label', 'Czynnik B — do');
+        } else if (operation === 'div') {
+            setText('custom-range-a-label', 'Dzielnik — od'); setText('custom-range-a-max-label', 'Dzielnik — do');
+            setText('custom-range-b-label', 'Iloraz — od'); setText('custom-range-b-max-label', 'Iloraz — do');
+        } else {
+            setText('custom-range-a-label', 'Składnik — od'); setText('custom-range-a-max-label', 'Składnik — do');
+        }
+    },
+    saveCustomConfig: function () {
+        const readNumber = id => Number(document.getElementById(id)?.value);
+        const name = String(document.getElementById('custom-name')?.value || '').trim().slice(0, 40);
+        const game = document.getElementById('custom-game')?.value || 'all';
+        const operation = document.getElementById('custom-operation')?.value || 'add';
+        const aMin = Math.floor(readNumber('custom-range-a-min'));
+        const aMax = Math.floor(readNumber('custom-range-a-max'));
+        const bMin = Math.floor(readNumber('custom-range-b-min'));
+        const bMax = Math.floor(readNumber('custom-range-b-max'));
+        const terms = Math.floor(readNumber('custom-terms'));
+        const time = readNumber('custom-time');
+        if (!name) return app.ui.toast('Nadaj konfiguracji nazwę.', 'warning');
+        if (![aMin, aMax, terms, time].every(Number.isFinite) || aMin < 1 || aMax < aMin || aMax > 99999999) {
+            return app.ui.toast('Popraw pierwszy zakres liczb.', 'warning');
+        }
+        if ((operation === 'mul' || operation === 'div') && (![bMin, bMax].every(Number.isFinite) || bMin < 1 || bMax < bMin || bMax > 99999999)) {
+            return app.ui.toast('Popraw drugi zakres liczb.', 'warning');
+        }
+        if (terms < 2 || terms > 50 || time < 0.1 || time > 60) {
+            return app.ui.toast('Seria: 2–50 liczb. Czas: 0,1–60 s.', 'warning');
+        }
+        const tier = document.getElementById('custom-tier')?.value || 'full';
+        const config = {
+            name, presetName: name, category: '', tier: (operation === 'mul' || operation === 'div') ? 'full' : tier,
+            d: Math.min(8, String(aMax).length), o: terms, t: time, m: operation,
+            ops: { add: operation === 'add' || operation === 'mixed', sub: operation === 'mixed' }
+        };
+        if (operation === 'mul') config.mul = { a: { min: aMin, max: aMax }, b: { min: bMin, max: bMax } };
+        else if (operation === 'div') config.div = { divisor: { min: aMin, max: aMax }, quotient: { min: bMin, max: bMax } };
+        else config.range = { min: aMin, max: aMax };
+
+        if (operation === 'add' || operation === 'mixed') {
+            const probes = Array.from({ length: 8 }, () => window.SorobanGen.generateAddSub(config));
+            if (probes.some(sequence => sequence.length !== terms)) {
+                return app.ui.toast('Ten zakres i technika nie pozwalają zbudować pełnej serii. Zwiększ zakres, skróć serię albo wybierz wyższą technikę.', 'warning');
+            }
+        }
+
+        const id = this._editingPresetId || `preset_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+        const item = { id, name, game, config };
+        const index = this.customPresets.findIndex(preset => preset.id === id);
+        if (index >= 0) this.customPresets[index] = item;
+        else if (this.customPresets.length >= 25) return app.ui.toast('Możesz zapisać maksymalnie 25 konfiguracji.', 'warning');
+        else this.customPresets.unshift(item);
+
+        const targetSelectId = this._customTargetSelectId;
+        this.save();
+        this.renderKyuSelects();
+        this._syncCustomPresets();
+        if (targetSelectId) {
+            const select = document.getElementById(targetSelectId);
+            if (select && Array.from(select.options).some(option => option.value === `custom:${id}`)) {
+                select.value = `custom:${id}`;
+                select.dataset.lastValue = select.value;
+                if (targetSelectId === 'game-kyu') this.updateGameInfo();
+            }
+        }
+        this.closeCustomConfig();
+        app.ui.toast(`Zapisano „${name}”.`, 'success');
+    },
+    deleteCustomConfig: function (id) {
+        const preset = this.customPresets.find(item => item.id === id);
+        if (!preset || !confirm(`Usunąć konfigurację „${preset.name}”?`)) return;
+        this.customPresets = this.customPresets.filter(item => item.id !== id);
+        this.save();
+        this.renderKyuSelects();
+        this._syncCustomPresets();
+        this.updateGameInfo();
+        app.ui.toast('Konfiguracja usunięta.', 'info');
+    },
+    _syncCustomPresets: function () {
+        if (this.multi && this.multi.socket && this.multi.socket.connected) {
+            this.multi.socket.emit('save_training_presets', { presets: this.customPresets });
+        }
+    },
+    renderCustomPresets: function () {
+        const list = document.getElementById('custom-presets-list');
+        if (!list) return;
+        if (!this.customPresets.length) {
+            list.innerHTML = '<p class="field-help">Nie masz jeszcze własnych konfiguracji. Utwórz pierwszą i nazwij ją tak, jak prowadzisz trening.</p>';
+            return;
+        }
+        const gameLabels = { all: 'Wszystkie', flash: 'Flash', spoken: 'Głosowy', worksheet: 'Arkusze', multiplayer: 'Multiplayer' };
+        const opLabels = { add: 'dodawanie', mixed: '+ / −', mul: 'mnożenie', div: 'dzielenie' };
+        list.innerHTML = this.customPresets.map(item => {
+            const cfg = item.config;
+            let rangeText = '';
+            if (cfg.m === 'mul') rangeText = `${cfg.mul.a.min}–${cfg.mul.a.max} × ${cfg.mul.b.min}–${cfg.mul.b.max}`;
+            else if (cfg.m === 'div') rangeText = `dzielnik ${cfg.div.divisor.min}–${cfg.div.divisor.max}, wynik ${cfg.div.quotient.min}–${cfg.div.quotient.max}`;
+            else rangeText = `${cfg.range.min}–${cfg.range.max}`;
+            return `<article class="custom-preset-card"><div class="custom-preset-card-header"><h4>${this._escapeHtml(item.name)}</h4><span class="preset-badge">${gameLabels[item.game] || 'Wszystkie'}</span></div><p>${opLabels[cfg.m] || cfg.m} · zakres ${rangeText} · ${cfg.o} liczb · ${cfg.t} s</p><div class="custom-preset-actions"><button class="btn btn-secondary" onclick="app.openCustomConfig('${item.game}', '', '${item.id}')">Edytuj</button><button class="btn btn-danger" onclick="app.deleteCustomConfig('${item.id}')">Usuń</button></div></article>`;
+        }).join('');
     },
     // Najbliższa dostępna prędkość z FLASH_SPEEDS do zadanej wartości
     _closestSpeed: function (t) {
         return FLASH_SPEEDS.reduce((best, v) => Math.abs(v - t) < Math.abs(best - t) ? v : best, FLASH_SPEEDS[0]);
     },
     updateGameInfo: function () {
-        const c = this.kyu[document.getElementById('game-kyu').value];
+        const c = this.getTrainingConfig(document.getElementById('game-kyu').value);
+        if (!c) return;
         const dStr = (typeof c.d === 'object') ? `${c.d.min}-${c.d.max}` : c.d;
         const oStr = (typeof c.o === 'object') ? `${c.o.min}-${c.o.max}` : c.o;
 
@@ -930,6 +1190,10 @@ const app = {
 
         document.getElementById('info-d').innerText = dStr;
         document.getElementById('info-o').innerText = oStr;
+        const rangeText = c.m === 'mul' && c.mul ? `${c.mul.a.min}–${c.mul.a.max} × ${c.mul.b.min}–${c.mul.b.max}`
+            : c.m === 'div' && c.div ? `${c.div.divisor.min}–${c.div.divisor.max} ÷ → ${c.div.quotient.min}–${c.div.quotient.max}`
+                : c.range ? `${c.range.min}–${c.range.max}` : 'wg poziomu';
+        document.getElementById('info-range').innerText = rangeText;
         // Jednostka "s" jest w znaczniku HTML — tu tylko wartość
         document.getElementById('info-t').innerText = sp ? parseFloat(sp.value) : c.t;
     },
@@ -963,6 +1227,19 @@ const app = {
     renderProfile: function (d) {
         if (!d) return;
         this._profile = d;
+
+        if (Array.isArray(d.trainingPresets)) {
+            const incomingPresets = this._sanitizeCustomPresets(d.trainingPresets);
+            if (!incomingPresets.length && this.customPresets.length) {
+                // Profil utworzony offline lub przed migracją: nie kasuj lokalnych
+                // ustawień, tylko doślij je do konta po odzyskaniu połączenia.
+                this._syncCustomPresets();
+            } else if (JSON.stringify(incomingPresets) !== JSON.stringify(this.customPresets)) {
+                this.customPresets = incomingPresets;
+                this.save();
+                this.renderKyuSelects();
+            }
+        }
 
         const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
         const totalXp = (d.totalXp || 0) + (d.soloXp || 0);
@@ -1163,6 +1440,7 @@ function nav(id) {
     if (id === 'flash' || id === 'spoken') {
         targetId = 'game-container';
         app.state.mode = id;
+        app._renderTrainingSelect('game-kyu', id);
         document.getElementById('game-title').innerText = id === 'flash' ? 'Flash Anzan' : 'Głosowy';
         // Reset setupu
         document.getElementById('game-setup').style.display = 'block';

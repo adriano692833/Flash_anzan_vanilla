@@ -5,6 +5,13 @@ Aplikacja: **https://anzan-web.ew.r.appspot.com**
 Konto jest wymagane przy wejściu do aplikacji. Wyniki zajęć są przechowywane na koncie,
 natomiast postęp trybów solo (Flash, Głosowy, Arkusz, Survival) pozostaje lokalnie w przeglądarce.
 
+### Poziomy Kyū i trening indywidualny
+
+Lista zawiera standardową drabinkę **20 Kyū → 1 Kyū**. Nad 20 Kyū znajduje się opcja
+**Indywidualny — utwórz własny**. Uczeń lub nauczyciel może nazwać profil i ustawić rodzaj gry,
+działanie, zakresy liczb, długość serii, czas prezentacji oraz dozwoloną technikę sorobanu.
+Zapisane profile są synchronizowane z kontem i pojawiają się w odpowiednich ekranach treningu.
+
 ---
 
 ## Dla NAUCZYCIELA

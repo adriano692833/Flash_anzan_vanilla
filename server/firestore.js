@@ -52,6 +52,10 @@ async function getUser(uid) {
     return snap.exists ? { uid: snap.id, ...snap.data() } : null;
 }
 
+async function updateTrainingPresets(uid, presets) {
+    await db.collection('users').doc(uid).set({ trainingPresets: presets }, { merge: true });
+}
+
 function todayKey() {
     return new Date().toISOString().split('T')[0];
 }
@@ -328,6 +332,7 @@ async function healthCheck() {
 module.exports = {
     registerUser,
     getUser,
+    updateTrainingPresets,
     createClass,
     getClass,
     findClassByJoinCode,
