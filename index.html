@@ -51,10 +51,10 @@
                 <h2 id="auth-heading-title">Wejdź do swojej szkoły</h2>
                 <p id="auth-heading-subtitle">Pracownik loguje się e-mailem, uczeń nazwą użytkownika.</p>
             </div>
-            <label class="stat-label">Nazwa użytkownika lub e-mail</label>
-            <input type="text" id="auth-username" class="input-lg" placeholder="e-mail lub nazwa ucznia"
+            <label id="auth-identifier-label" class="stat-label">E-mail pracownika lub login ucznia</label>
+            <input type="text" id="auth-username" class="input-lg" placeholder="np. właściciel@szkola.pl lub ania2016"
                 style="margin-bottom: 1rem;" autocomplete="username">
-            <p class="auth-login-help">Właściciel, nauczyciel lub opiekun loguje się <b>e-mailem</b>. Uczeń bez e-maila — nazwą użytkownika.</p>
+            <p id="auth-identifier-help" class="auth-login-help">Właściciel, nauczyciel lub opiekun loguje się <b>e-mailem</b>. Uczeń bez e-maila — loginem.</p>
             <label class="stat-label">Hasło</label>
             <input type="password" id="auth-password" class="input-lg" placeholder="min. 6 znaków"
                 style="margin-bottom: 1rem;" autocomplete="current-password">

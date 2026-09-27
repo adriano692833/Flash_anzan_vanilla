@@ -1,6 +1,6 @@
 {
   "name": "anzan-server",
-  "version": "7.0.2",
+  "version": "7.0.3",
   "description": "Flash Anzan — low-cost platform for soroban and mental arithmetic schools",
   "main": "server.js",
   "scripts": {

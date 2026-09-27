@@ -262,6 +262,8 @@
         const subtitle = document.getElementById('auth-heading-subtitle');
         const password = document.getElementById('auth-password');
         const username = document.getElementById('auth-username');
+        const identifierLabel = document.getElementById('auth-identifier-label');
+        const identifierHelp = document.getElementById('auth-identifier-help');
         const reset = document.getElementById('auth-reset-action');
         if (fields) fields.style.display = registering ? 'block' : 'none';
         if (loginActions) loginActions.style.display = registering ? 'none' : 'grid';
@@ -273,9 +275,13 @@
             : 'Pracownik loguje się e-mailem, uczeń bez e-maila nazwą użytkownika.';
         if (password) password.autocomplete = registering ? 'new-password' : 'current-password';
         if (username) {
-            username.placeholder = registering ? 'wybierz nazwę użytkownika' : 'e-mail lub nazwa ucznia';
+            username.placeholder = registering ? 'wybierz login wyświetlany w aplikacji' : 'np. właściciel@szkola.pl lub ania2016';
             username.autocomplete = registering ? 'username' : 'username';
         }
+        if (identifierLabel) identifierLabel.innerText = registering ? 'Nazwa użytkownika' : 'E-mail pracownika lub login ucznia';
+        if (identifierHelp) identifierHelp.innerHTML = registering
+            ? 'Ta nazwa będzie widoczna w aplikacji. Pracownik będzie później logował się podanym niżej e-mailem.'
+            : 'Właściciel, nauczyciel lub opiekun loguje się <b>e-mailem</b>. Uczeń bez e-maila — loginem.';
         if (reset) reset.style.display = registering ? 'none' : 'block';
         if (!registering) {
             const code = document.getElementById('auth-teacher-code');
