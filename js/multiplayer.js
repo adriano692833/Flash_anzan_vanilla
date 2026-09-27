@@ -119,6 +119,7 @@
                 this.myUid = d.uid;
                 this.schoolId = d.schoolId || '';
                 this.schoolRole = d.schoolRole || '';
+                this.canTeach = !!d.canTeach;
                 this.pendingTeacherCode = '';
                 this.pendingContacts = {};
                 this._connectErrors = 0;
@@ -127,6 +128,7 @@
                     this.loadClasses();
                     this.requestSchool();
                 } else if (d.role === 'school_admin') {
+                    if (this.canTeach) this.loadClasses();
                     this.requestSchool();
                     if (typeof window.nav === 'function') window.nav('multiplayer');
                 } else if (d.role === 'guardian') {
@@ -445,7 +447,7 @@
             const classSel = document.getElementById('host-class');
             const classId = classSel ? classSel.value : '';
 
-            if (this.myRole !== 'teacher') return app.ui.toast('Tylko nauczyciel może utworzyć pokój.', 'warning');
+            if (!this.canTeach) return app.ui.toast('Brak uprawnienia do prowadzenia zajęć.', 'warning');
             if (!classId) return app.ui.toast('Wybierz klasę dla pokoju.', 'warning');
             if (!trainingConfig) return app.ui.toast('Wybierz poziom lub zapisaną konfigurację.', 'warning');
 
@@ -599,7 +601,7 @@
         renderClassMembers: function (classId, members) {
             const box = document.getElementById('members-' + classId);
             if (!box) return;
-            const canManage = this.myRole === 'teacher';
+            const canManage = this.canTeach && (this.myClasses || []).some(item => item.id === classId);
             box.innerHTML = (members && members.length)
                 ? members.map(m => `
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:0.3rem 0.4rem; border-top:1px solid var(--glass-border);">
@@ -746,7 +748,7 @@
             const s = document.getElementById('student-panel');
             const ranking = document.getElementById('ranking-panel');
             if (a) a.style.display = role === 'school_admin' ? 'block' : 'none';
-            if (t) t.style.display = role === 'teacher' ? 'block' : 'none';
+            if (t) t.style.display = role === 'teacher' || this.canTeach ? 'block' : 'none';
             if (s) s.style.display = role === 'student' ? 'block' : 'none';
             if (ranking) ranking.style.display = ['school_admin', 'guardian'].includes(role) ? 'none' : 'block';
 

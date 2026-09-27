@@ -15,6 +15,7 @@ jednorazowego kodu, który przypisuje rolę, szkołę, a uczniowi również klas
 3. W **Plan szkoły → Zaproszenia** właściciel tworzy jednorazowe zaproszenia nauczycieli.
 4. Właściciel tworzy klasę i przypisuje nauczyciela. Właściciel lub nauczyciel tworzy pulę
    kodów uczniowskich dla konkretnej klasy.
+   Właściciel może przypisać klasę także sobie i prowadzić zajęcia jak nauczyciel.
 5. Dla opiekuna tworzy się osobne zaproszenie powiązane z konkretnym uczniem.
 
 Kod jest widoczny w całości tylko przy tworzeniu, wygasa po 1–30 dniach i działa jeden raz.

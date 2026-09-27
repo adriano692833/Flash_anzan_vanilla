@@ -89,7 +89,7 @@
             setVisible('ops-invites-card', isStaff);
             setVisible('ops-class-editor', role === 'school_admin');
             setVisible('ops-schedule-editor', isStaff);
-            setVisible('ops-assignment-editor', role === 'teacher');
+            setVisible('ops-assignment-editor', !!data.canTeach);
             setVisible('ops-family-card', ['student', 'guardian'].includes(role));
             setVisible('ops-audit-card', role === 'school_admin');
             setVisible('ops-requests-card', role === 'school_admin');
@@ -105,7 +105,7 @@
                 el.innerHTML = classes.length ? classes.filter(c => c.active !== false).map(c => `<option value="${he(c.id)}">${he(c.name)} ${he(c.schoolYear || '')}</option>`).join('') : '<option value="">— brak klas —</option>';
                 if (selected && classes.some(c => c.id === selected)) el.value = selected;
             });
-            const staff = (data.staff || []).filter(user => user.role === 'teacher');
+            const staff = (data.staff || []).filter(user => user.canTeach || user.role === 'teacher');
             const teacherSelect = document.getElementById('ops-event-teacher');
             if (teacherSelect) teacherSelect.innerHTML = staff.length ? staff.map(user => `<option value="${he(user.uid)}">${he(user.name)}</option>`).join('') : '<option value="">— brak nauczycieli —</option>';
             const classTeacher = document.getElementById('ops-class-teacher');

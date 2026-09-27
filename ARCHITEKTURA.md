@@ -16,7 +16,8 @@ kopii dla każdego tygodnia, a raport zajęć jest zapisywany zbiorczo po zakoń
 
 ## Role i granice dostępu
 
-- `school_admin` / owner — cała szkoła, nauczyciele, klasy, plan, rankingi, historia i audyt.
+- `school_admin` / owner — cała szkoła, nauczyciele, klasy, plan, rankingi, historia i audyt;
+  ma również uprawnienie prowadzącego, bo w małej szkole owner często sam uczy.
 - `teacher` — przypisane klasy, uczniowie, zajęcia, obecność, zadania i zaproszenia uczniów.
 - `student` — własna klasa, plan, zadania, trening i wyniki.
 - `guardian` — odczyt planu/zadań powiązanego ucznia i prośby o odrabianie.

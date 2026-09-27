@@ -202,8 +202,13 @@ async function createSchool(schoolId, { name, ownerUid, ownerName }) {
             seatLimit: 100,
             createdAt: Firestore.FieldValue.serverTimestamp()
         });
-        transaction.update(userRef, { schoolId, schoolRole: 'owner', role: 'school_admin' });
+        transaction.update(userRef, { schoolId, schoolRole: 'owner', role: 'school_admin', canTeach: true });
     });
+    await ref.collection('teachers').doc(ownerUid).set({
+        name: ownerName,
+        role: 'owner_instructor',
+        lastActive: Firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
     const legacyClasses = await db.collection('classes').where('teacherUid', '==', ownerUid).get();
     if (!legacyClasses.empty) {
         const batch = db.batch();

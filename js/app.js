@@ -80,7 +80,7 @@ const KYU_VERSION = 5;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.0.1 Owner UX';
+const APP_VERSION = '7.0.2 Owner + Instructor';
 const APP_UPDATED = '2026-09-27';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.

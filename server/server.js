@@ -650,6 +650,7 @@ io.on('connection', (socket) => {
         let effectiveRole = role;
         let schoolId = '';
         let schoolRole = '';
+        let canTeach = false;
         let isNewProfile = false;
         try {
             const existing = await getUser(uid);
@@ -659,6 +660,7 @@ io.on('connection', (socket) => {
                 schoolId = existing.schoolId || '';
                 schoolRole = existing.schoolRole || '';
                 if (role === 'school_admin') schoolRole = 'owner';
+                canTeach = role === 'teacher' || role === 'school_admin' || !!existing.canTeach;
             } else {
                 isNewProfile = true;
                 const rawCode = String(inviteCode || teacherCode || '').trim();
@@ -687,6 +689,7 @@ io.on('connection', (socket) => {
                         return;
                     }
                     role = invitation.role;
+                    canTeach = role === 'teacher' || role === 'school_admin';
                     schoolId = invitation.schoolId || '';
                     schoolRole = role === 'teacher' ? 'teacher' : '';
                     if (!['school_admin', 'teacher', 'student', 'guardian'].includes(role)
@@ -742,6 +745,7 @@ io.on('connection', (socket) => {
                 effectiveRole = stored.role;
                 schoolId = stored.schoolId || schoolId;
                 schoolRole = stored.schoolRole || schoolRole;
+                canTeach = stored.role === 'teacher' || stored.role === 'school_admin' || !!stored.canTeach;
             }
         } catch (e) {
             // Bez profilu z Firestore nie znamy autorytatywnej roli — cicha degradacja
@@ -757,9 +761,10 @@ io.on('connection', (socket) => {
         socket.data.accountRole = effectiveRole;
         socket.data.schoolId = schoolId;
         socket.data.schoolRole = schoolRole;
+        socket.data.canTeach = canTeach;
         socket.data.emailVerified = !!decoded.email_verified;
         socket.data.roomRole = null;
-        socket.emit('registered', { uid, name: safeName, avatar: safeAvatar, role: effectiveRole, schoolId, schoolRole });
+        socket.emit('registered', { uid, name: safeName, avatar: safeAvatar, role: effectiveRole, schoolId, schoolRole, canTeach });
     });
 
     // Gwarancja uwierzytelnienia dla akcji wymagających konta.
@@ -974,13 +979,15 @@ io.on('connection', (socket) => {
                 assignments = assignments.filter(item => item.classId === classId);
             }
             const staff = allUsers.filter(user => ['teacher', 'school_admin'].includes(user.role)).map(user => ({
-                uid: user.uid, name: user.name, role: user.role
+                uid: user.uid, name: user.name, role: user.role,
+                canTeach: user.role === 'teacher' || user.role === 'school_admin' || !!user.canTeach
             }));
             const visibleClasses = socket.data.accountRole === 'teacher'
                 ? (dashboard.classes || []).filter(item => item.teacherUid === socket.uid)
                 : (dashboard.classes || []);
             socket.emit('school_operations_data', {
                 role: socket.data.accountRole,
+                canTeach: !!socket.data.canTeach,
                 timezone: 'Europe/Warsaw',
                 classId,
                 classes: visibleClasses,
@@ -1028,7 +1035,8 @@ io.on('connection', (socket) => {
         }
         const className = sanitizeLabel(name, 60);
         const teacher = await getUser(String(teacherUid || ''));
-        if (!className || !teacher || teacher.role !== 'teacher' || teacher.schoolId !== socket.data.schoolId) {
+        const teacherCanTeach = teacher && (teacher.role === 'teacher' || teacher.role === 'school_admin' || teacher.canTeach);
+        if (!className || !teacherCanTeach || teacher.schoolId !== socket.data.schoolId) {
             return socket.emit('error_msg', 'Podaj nazwę klasy i wybierz nauczyciela z tej szkoły.');
         }
         try {
@@ -1052,7 +1060,8 @@ io.on('connection', (socket) => {
         const isOwner = socket.data.accountRole === 'school_admin';
         const teacherUid = isOwner ? String(payload.teacherUid || cls.teacherUid || '') : socket.uid;
         const teacher = await getUser(teacherUid);
-        if (!teacher || teacher.schoolId !== socket.data.schoolId || teacher.role !== 'teacher') {
+        const teacherCanTeach = teacher && (teacher.role === 'teacher' || teacher.role === 'school_admin' || teacher.canTeach);
+        if (!teacherCanTeach || teacher.schoolId !== socket.data.schoolId) {
             return socket.emit('error_msg', 'Wybierz nauczyciela z tej szkoły.');
         }
         const kind = payload.kind === 'weekly' ? 'weekly' : 'once';
@@ -1101,7 +1110,7 @@ io.on('connection', (socket) => {
 
     socket.on('create_assignment', async (payload = {}) => {
         if (!checkRateLimit(socket.id, 'create_assignment', 10, 60000)) return;
-        if (!requireAuth() || socket.data.accountRole !== 'teacher' || !await requireActiveSchool()) return;
+        if (!requireAuth() || !socket.data.canTeach || !await requireActiveSchool()) return;
         if (!requireVerifiedStaff()) return;
         const cls = await manageableClass(payload.classId);
         if (!cls) return socket.emit('error_msg', 'Brak dostępu do klasy.');
@@ -1186,7 +1195,7 @@ io.on('connection', (socket) => {
         if (!checkRateLimit(socket.id, 'create_class', 5, 10000)) return;
         if (!requireAuth()) return;
         if (!requireVerifiedStaff()) return;
-        if (socket.data.accountRole !== 'teacher') return socket.emit('error_msg', 'Tylko nauczyciel może tworzyć klasy.');
+        if (!socket.data.canTeach) return socket.emit('error_msg', 'Brak uprawnienia do prowadzenia klas.');
         if (!await requireActiveSchool()) return;
         const className = sanitizeLabel(name, 60);
         if (!className) return socket.emit('error_msg', 'Podaj nazwę klasy.');
@@ -1210,7 +1219,7 @@ io.on('connection', (socket) => {
         if (!checkRateLimit(socket.id, 'list_classes', 10, 10000)) return;
         if (!requireAuth()) return;
         try {
-            const classes = socket.data.accountRole === 'teacher'
+            const classes = socket.data.canTeach
                 ? await listClassesForTeacher(socket.uid, socket.data.schoolId)
                 : [];
             socket.emit('classes_list', { classes });
@@ -1240,7 +1249,7 @@ io.on('connection', (socket) => {
 
     // Weryfikacja: zalogowany nauczyciel będący właścicielem klasy.
     async function ownsClass(classId) {
-        if (!socket.uid || socket.data.accountRole !== 'teacher') return null;
+        if (!socket.uid || !socket.data.canTeach) return null;
         try {
             const cls = await getClass(String(classId || ''));
             const assigned = cls && cls.teacherUid === socket.uid
@@ -1350,7 +1359,7 @@ io.on('connection', (socket) => {
         if (!checkRateLimit(socket.id, 'create_room', 3, 10000)) return;
         if (!requireAuth()) return;
         if (!requireVerifiedStaff()) return;
-        if (socket.data.accountRole !== 'teacher') return socket.emit('error_msg', 'Tylko nauczyciel może tworzyć pokój.');
+        if (!socket.data.canTeach) return socket.emit('error_msg', 'Brak uprawnienia do prowadzenia zajęć.');
         if (!await requireActiveSchool()) return;
 
         // Zweryfikuj, że klasa istnieje i należy do tego nauczyciela.
