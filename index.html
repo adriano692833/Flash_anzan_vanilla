@@ -243,6 +243,11 @@
                             <label class="stat-label">Prędkość (czas wyświetlania)</label>
                             <select id="game-speed" class="input-lg" style="margin-bottom: 1rem;"></select>
 
+                            <label class="stat-label">Limit wyniku końcowego</label>
+                            <input id="game-max-result" type="number" min="1" max="9007199254740991" step="1"
+                                class="input-lg" style="margin-bottom: 0.4rem;" onchange="app.updateMaxResultInfo()">
+                            <p class="field-help" style="margin-bottom: 1rem;">Możesz obniżyć limit dla wybranego Kyu. Wartość pozostaje aktywna w kolejnych zadaniach.</p>
+
                             <div
                                 style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; color: var(--text-muted); background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 0.5rem;">
                                 <div>Cyfry: <span id="info-d" style="color:white; font-weight:bold"></span></div>

@@ -91,7 +91,7 @@ const KYU_VERSION = 6;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.3.4 Configurable Result Limit';
+const APP_VERSION = '7.3.5 Kyu Result Override';
 const APP_UPDATED = '2026-09-28';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -126,7 +126,7 @@ const app = {
     kyu: null,
     customPresets: [],
     user: { xp: 0, level: 1, streak: 0, settings: { sound: true, wsTime: 5 } },
-    state: { mode: '', nums: [], sum: null, idx: 0, timer: null, wsExp: [], checked: false },
+    state: { mode: '', nums: [], sum: null, idx: 0, timer: null, wsExp: [], checked: false, maxResult: null },
 
     multi: null,
 
@@ -220,6 +220,7 @@ const app = {
 
         document.getElementById('game-kyu').addEventListener('change', () => this.updateGameInfo());
         document.getElementById('game-speed').addEventListener('change', () => this.updateSpeedInfo());
+        document.getElementById('game-max-result').addEventListener('input', () => this.updateMaxResultInfo());
         this.updateGameInfo();
 
         // --- MOBILE NAV GESTURES ---
@@ -345,11 +346,12 @@ const app = {
             kId = this.state.survivalLevel || 20; // Default to 20 Kyu
         }
 
-        const cfg = this.getTrainingConfig(kId);
-        if (!cfg) {
+        const baseCfg = this.getTrainingConfig(kId);
+        if (!baseCfg) {
             app.ui.toast('Wybierz poziom lub zapisaną konfigurację.', 'warning');
             return;
         }
+        let cfg = baseCfg;
         // const noNeg = cfg.noNeg === undefined ? true : cfg.noNeg; // Handled internally now
 
         // Wybrana prędkość jest ustawieniem sesji treningowej i nie może wracać
@@ -362,6 +364,30 @@ const app = {
             this.state.flashSpeed = spEl ? (parseFloat(spEl.value) || cfg.t) : cfg.t;
         } else if (!Number.isFinite(Number(this.state.flashSpeed)) || Number(this.state.flashSpeed) <= 0) {
             this.state.flashSpeed = cfg.t;
+        }
+
+        // Limit wyniku działa jak prędkość: można go zmienić dla zwykłego Kyu
+        // bez modyfikowania zapisanej drabinki. Limit zapisanej konfiguracji
+        // indywidualnej pozostaje górną granicą i nie można go tu poluzować.
+        if (!serverDriven && this.state.mode !== 'survival') {
+            if (fromLocalSetup) {
+                const raw = String(document.getElementById('game-max-result')?.value || '').trim();
+                const requested = raw === '' ? null : Number(raw);
+                if (requested !== null && (!Number.isSafeInteger(requested) || requested < 1)) {
+                    app.ui.toast('Limit wyniku musi być dodatnią liczbą całkowitą.', 'warning');
+                    return;
+                }
+                this.state.maxResult = requested;
+            }
+            const savedValue = Number(baseCfg.maxResult);
+            const requestedValue = Number(this.state.maxResult);
+            const savedLimit = Number.isSafeInteger(savedValue) && savedValue >= 1 ? savedValue : null;
+            const requestedLimit = this.state.maxResult !== null && Number.isSafeInteger(requestedValue) && requestedValue >= 1
+                ? requestedValue : null;
+            const effectiveLimit = savedLimit !== null && requestedLimit !== null
+                ? Math.min(savedLimit, requestedLimit)
+                : (savedLimit !== null ? savedLimit : requestedLimit);
+            if (effectiveLimit !== null) cfg = Object.assign({}, baseCfg, { maxResult: effectiveLimit });
         }
 
         try {
@@ -1303,6 +1329,12 @@ const app = {
                 : c.range ? `${c.range.min}–${c.range.max}` : 'wg poziomu';
         document.getElementById('info-range').innerText = rangeText;
         const maximum = this.trainingMaximum(c);
+        const maxInput = document.getElementById('game-max-result');
+        if (maxInput) {
+            maxInput.value = Number.isSafeInteger(Number(c.maxResult)) ? Number(c.maxResult)
+                : (Number.isSafeInteger(maximum.value) ? maximum.value : '');
+            this.state.maxResult = maxInput.value === '' ? null : Number(maxInput.value);
+        }
         const maximumEl = document.getElementById('info-max-result');
         if (maximumEl) {
             maximumEl.innerText = maximum.label;
@@ -1312,6 +1344,22 @@ const app = {
         }
         // Jednostka "s" jest w znaczniku HTML — tu tylko wartość
         document.getElementById('info-t').innerText = sp ? parseFloat(sp.value) : c.t;
+    },
+    updateMaxResultInfo: function () {
+        const select = document.getElementById('game-kyu');
+        const input = document.getElementById('game-max-result');
+        const output = document.getElementById('info-max-result');
+        if (!select || !input || !output) return;
+        const base = this.getTrainingConfig(select.value);
+        if (!base) return;
+        const raw = String(input.value || '').trim();
+        const requested = raw === '' ? null : Number(raw);
+        const saved = Number.isSafeInteger(Number(base.maxResult)) ? Number(base.maxResult) : null;
+        const effective = saved !== null && Number.isSafeInteger(requested) ? Math.min(saved, requested)
+            : (saved !== null ? saved : requested);
+        const cfg = Number.isSafeInteger(effective) && effective >= 1
+            ? Object.assign({}, base, { maxResult: effective }) : base;
+        output.innerText = this.trainingMaximum(cfg).label;
     },
     // Odśwież pole "Czas" po ręcznej zmianie suwaka prędkości
     updateSpeedInfo: function () {
