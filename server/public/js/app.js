@@ -91,7 +91,7 @@ const KYU_VERSION = 6;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.3.2 No Repeat Window';
+const APP_VERSION = '7.3.3 Maximum Result Preview';
 const APP_UPDATED = '2026-09-28';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -987,6 +987,8 @@ const app = {
         }
 
         this.renderCustomPresets();
+        this.updateWorksheetMaximum();
+        this.updateHostMaximum();
     },
     _escapeHtml: function (value) {
         const chars = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -1064,6 +1066,8 @@ const app = {
         }
         select.dataset.lastValue = select.value;
         if (selectId === 'game-kyu') this.updateGameInfo();
+        else if (selectId === 'ws-kyu') this.updateWorksheetMaximum();
+        else if (selectId === 'host-kyu') this.updateHostMaximum();
     },
     getTrainingConfig: function (selection) {
         if (String(selection).startsWith('custom:')) {
@@ -1241,8 +1245,30 @@ const app = {
             else if (cfg.m === 'div') rangeText = `dzielnik ${cfg.div.divisor.min}–${cfg.div.divisor.max}, wynik ${cfg.div.quotient.min}–${cfg.div.quotient.max}`;
             else rangeText = `${cfg.range.min}–${cfg.range.max}`;
             const countText = (cfg.m === 'mul' || cfg.m === 'div') ? '2 operandy' : `${cfg.o} składników`;
-            return `<article class="custom-preset-card"><div class="custom-preset-card-header"><h4>${this._escapeHtml(item.name)}</h4><span class="preset-badge">${gameLabels[item.game] || 'Wszystkie'}</span></div><p>${opLabels[cfg.m] || cfg.m} · zakres ${rangeText} · ${countText} · ${cfg.t} s</p><div class="custom-preset-actions"><button class="btn btn-secondary" onclick="app.openCustomConfig('${item.game}', '', '${item.id}')">Edytuj</button><button class="btn btn-danger" onclick="app.deleteCustomConfig('${item.id}')">Usuń</button></div></article>`;
+            const maxResult = this.trainingMaximum(cfg);
+            return `<article class="custom-preset-card"><div class="custom-preset-card-header"><h4>${this._escapeHtml(item.name)}</h4><span class="preset-badge">${gameLabels[item.game] || 'Wszystkie'}</span></div><p>${opLabels[cfg.m] || cfg.m} · zakres ${rangeText} · ${countText} · ${cfg.t} s · maks. wynik ${maxResult.label}</p><div class="custom-preset-actions"><button class="btn btn-secondary" onclick="app.openCustomConfig('${item.game}', '', '${item.id}')">Edytuj</button><button class="btn btn-danger" onclick="app.deleteCustomConfig('${item.id}')">Usuń</button></div></article>`;
         }).join('');
+    },
+    trainingMaximum: function (config) {
+        const result = window.SorobanGen && typeof window.SorobanGen.maxPossibleResult === 'function'
+            ? window.SorobanGen.maxPossibleResult(config || {})
+            : { value: 0, exact: false };
+        const value = Number(result && result.value);
+        const formatted = Number.isSafeInteger(value) ? value.toLocaleString('pl-PL') : '—';
+        return { value, exact: !!(result && result.exact), label: result && result.exact ? formatted : `≤ ${formatted}` };
+    },
+    updateWorksheetMaximum: function () {
+        const target = document.getElementById('ws-max-result');
+        if (!target) return;
+        const cfg = this._wsConfig().cfg;
+        target.innerText = cfg ? `Maksymalny wynik: ${this.trainingMaximum(cfg).label}` : '';
+    },
+    updateHostMaximum: function () {
+        const select = document.getElementById('host-kyu');
+        const target = document.getElementById('host-max-result');
+        if (!select || !target) return;
+        const cfg = this.getTrainingConfig(select.value);
+        target.innerText = cfg ? `Maksymalny wynik: ${this.trainingMaximum(cfg).label}` : '';
     },
     updateGameInfo: function () {
         const c = this.getTrainingConfig(document.getElementById('game-kyu').value);
@@ -1266,6 +1292,14 @@ const app = {
             : c.m === 'div' && c.div ? `${c.div.divisor.min}–${c.div.divisor.max} ÷ → ${c.div.quotient.min}–${c.div.quotient.max}`
                 : c.range ? `${c.range.min}–${c.range.max}` : 'wg poziomu';
         document.getElementById('info-range').innerText = rangeText;
+        const maximum = this.trainingMaximum(c);
+        const maximumEl = document.getElementById('info-max-result');
+        if (maximumEl) {
+            maximumEl.innerText = maximum.label;
+            maximumEl.title = maximum.exact
+                ? 'Najwyższy wynik osiągalny przy tej konfiguracji.'
+                : 'Górna granica wynikająca z zakresu; ograniczenia techniki mogą ją obniżyć.';
+        }
         // Jednostka "s" jest w znaczniku HTML — tu tylko wartość
         document.getElementById('info-t').innerText = sp ? parseFloat(sp.value) : c.t;
     },

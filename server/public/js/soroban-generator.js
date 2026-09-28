@@ -260,6 +260,66 @@
         return [bMin * cMin, bMin];
     }
 
+    // Najwyższy wynik wynikający z konfiguracji. Dla poziomów jednocyfrowych
+    // bez przeniesienia liczymy dokładnie wszystkie osiągalne stany; dla
+    // pozostałych działań maksimum wynika bezpośrednio z granic konfiguracji.
+    function maxPossibleResult(cfg) {
+        const mode = cfg.m || 'add';
+        if (mode === 'mul') {
+            const d = resolveDigits(cfg);
+            const aMax = cfg.mul && cfg.mul.a ? Number(cfg.mul.a.max) : Math.pow(10, d) - 1;
+            const bMax = cfg.mul && cfg.mul.b ? Number(cfg.mul.b.max) : 9;
+            return { value: aMax * bMax, exact: Number.isSafeInteger(aMax * bMax) };
+        }
+        if (mode === 'div') {
+            const qMax = cfg.div && cfg.div.quotient ? Number(cfg.div.quotient.max) : 9;
+            return { value: qMax, exact: true };
+        }
+
+        const digits = resolveDigits(cfg);
+        const tierName = resolveTier(cfg);
+        const tierLimit = TIER[tierName];
+        const termMin = cfg.range ? Math.max(1, Math.floor(Number(cfg.range.min))) : (digits >= 2 ? Math.pow(10, digits - 1) : 1);
+        const termMax = cfg.range ? Math.max(termMin, Math.floor(Number(cfg.range.max))) : Math.pow(10, digits) - 1;
+        const minTerms = typeof cfg.o === 'number' ? cfg.o : Number(cfg.o && cfg.o.min) || 5;
+        const maxTerms = typeof cfg.o === 'number' ? cfg.o : Number(cfg.o && cfg.o.max) || minTerms;
+        const allowSub = mode === 'mixed' || (cfg.ops && cfg.ops.sub);
+        const required = Number(cfg.requiredAbsValue);
+
+        if (digits === 1 && tierLimit <= TIER.friend5) {
+            let states = [{ total: 0, required: false }];
+            let maximum = 0;
+            for (let step = 0; step < maxTerms; step++) {
+                const next = new Map();
+                for (const state of states) {
+                    const rods = state.total === 0 ? [] : [state.total];
+                    const ops = step === 0 || !allowSub ? ['+'] : ['+', '-'];
+                    for (let value = termMin; value <= termMax; value++) {
+                        for (const op of ops) {
+                            if (op === '-' && state.total < value) continue;
+                            const result = applyTerm(rods, value, op);
+                            if (!result.ok || result.tier > tierLimit) continue;
+                            const total = state.total + (op === '-' ? -value : value);
+                            const hasRequired = state.required || (Number.isFinite(required) && value === required);
+                            next.set(total + ':' + hasRequired, { total, required: hasRequired });
+                        }
+                    }
+                }
+                states = Array.from(next.values());
+                const termCount = step + 1;
+                if (termCount >= minTerms) {
+                    for (const state of states) {
+                        if (!Number.isFinite(required) || state.required) maximum = Math.max(maximum, state.total);
+                    }
+                }
+            }
+            return { value: maximum, exact: true };
+        }
+
+        const value = maxTerms * termMax;
+        return { value, exact: tierLimit >= TIER.friend10 && Number.isSafeInteger(value) };
+    }
+
     // --- Dyspozytor + deduplikacja ostatnich sekwencji ---
     // Domyślnie historia globalna (tryb solo = jeden użytkownik). Serwer może
     // przekazać własną tablicę historii per pokój (opts.history), żeby równoległe
@@ -313,6 +373,7 @@
         generateAddSub: generateAddSub,
         generateMul: generateMul,
         generateDiv: generateDiv,
+        maxPossibleResult: maxPossibleResult,
         // pomocnicze (używane w self-teście)
         applyTerm: applyTerm,
         resolveTier: resolveTier,

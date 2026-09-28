@@ -33,6 +33,20 @@ const TIER = G.TIER;
 let violations = 0, negatives = 0, empties = 0, badLengths = 0, badAnswers = 0;
 const N = 2000;
 
+const EXPECTED_MAX = {
+    20: 9, 19: 4, 18: 9, 17: 9, 16: 9, 15: 9, 14: 9,
+    13: 90, 12: 90, 11: 135, 10: 990, 9: 792, 8: 9990,
+    7: 9990, 6: 99990, 5: 699993, 4: 69999993,
+    3: 499999995, 2: 799999992, 1: 1199999988
+};
+
+for (const [kyu, expected] of Object.entries(EXPECTED_MAX)) {
+    const maximum = G.maxPossibleResult(KYU[kyu]);
+    if (!maximum.exact || maximum.value !== expected) violations++;
+}
+if (G.maxPossibleResult({ m: 'mul', d: 1, mul: { a: { min: 2, max: 12 }, b: { min: 3, max: 8 } } }).value !== 96) violations++;
+if (G.maxPossibleResult({ m: 'div', div: { divisor: { min: 2, max: 9 }, quotient: { min: 4, max: 25 } } }).value !== 25) violations++;
+
 for (const kyu of Object.keys(KYU)) {
     const cfg = KYU[kyu];
     const limit = TIER[cfg.tier];

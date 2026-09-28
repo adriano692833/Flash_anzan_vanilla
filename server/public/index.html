@@ -249,6 +249,7 @@
                                 <div>Liczb: <span id="info-o" style="color:white; font-weight:bold"></span></div>
                                 <div>Zakres: <span id="info-range" style="color:white; font-weight:bold"></span></div>
                                 <div>Czas: <span id="info-t" style="color:white; font-weight:bold"></span>s</div>
+                                <div style="grid-column: 1 / -1;">Maksymalny wynik: <span id="info-max-result" style="color:white; font-weight:bold"></span></div>
                             </div>
                         </div>
                         <button class="btn btn-primary" style="font-size: 1.3rem;"
@@ -352,9 +353,10 @@
                         <label class="stat-label">Wybierz poziom</label>
                         <select id="ws-kyu" class="input-lg" style="margin-bottom: 0.5rem;" onchange="app.onTrainingSelectChange('ws-kyu')"></select>
                         <p class="field-help">Profile indywidualne mogą mieć osobne zakresy dla arkuszy.</p>
+                        <p id="ws-max-result" class="field-help"></p>
 
                         <label class="stat-label">Operacja</label>
-                        <select id="ws-op" class="input-lg">
+                        <select id="ws-op" class="input-lg" onchange="app.updateWorksheetMaximum()">
                             <option value="">Według wybranego poziomu / konfiguracji</option>
                             <option value="mul">Mnożenie (×)</option>
                             <option value="div">Dzielenie (÷)</option>
@@ -661,6 +663,7 @@
                                 <label class="stat-label">Poziom trudności</label>
                                 <select id="host-kyu" class="input-lg" style="margin-bottom: 0.5rem;" onchange="app.onTrainingSelectChange('host-kyu')"></select>
                                 <p class="field-help">Możesz użyć własnego profilu przygotowanego specjalnie dla zajęć.</p>
+                                <p id="host-max-result" class="field-help"></p>
                                 <label class="stat-label">Tryb gry</label>
                                 <select id="host-mode" class="input-lg" style="margin-bottom: 1rem;">
                                     <option value="auto">Automatyczny (wszyscy widzą jednocześnie)</option>
