@@ -91,7 +91,7 @@ const KYU_VERSION = 5;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.3 Verified Task Engine';
+const APP_VERSION = '7.3.1 Persistent Training Setup';
 const APP_UPDATED = '2026-09-28';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -352,13 +352,15 @@ const app = {
         }
         // const noNeg = cfg.noNeg === undefined ? true : cfg.noNeg; // Handled internally now
 
-        // Prędkość flash — osobna oś, sterowana suwakiem tylko przy starcie z lokalnego
-        // ekranu treningu. Survival i multiplayer używają domyślnej prędkości poziomu
-        // (survival przyspiesza wraz z poziomem; MP bierze cfg.t z konfiguracji serwera).
-        if (fromLocalSetup && this.state.mode !== 'survival') {
+        // Wybrana prędkość jest ustawieniem sesji treningowej i nie może wracać
+        // do wartości poziomu po pierwszym przykładzie. Survival i multiplayer
+        // pozostają sterowane odpowiednio drabinką oraz konfiguracją serwera.
+        if (serverDriven || this.state.mode === 'survival') {
+            this.state.flashSpeed = cfg.t;
+        } else if (fromLocalSetup) {
             const spEl = document.getElementById('game-speed');
             this.state.flashSpeed = spEl ? (parseFloat(spEl.value) || cfg.t) : cfg.t;
-        } else {
+        } else if (!Number.isFinite(Number(this.state.flashSpeed)) || Number(this.state.flashSpeed) <= 0) {
             this.state.flashSpeed = cfg.t;
         }
 
@@ -648,10 +650,13 @@ const app = {
                 this.startGame();
             }
         } else {
-            // 3. Standard Single Player
-            // 3. Standard Single Player
+            // Standardowy Flash/Głosowy: przed każdą kolejną rundą wróć do
+            // konfiguracji. Aktualny poziom i ręcznie wybrany czas pozostają
+            // zaznaczone, ale można je zmienić przed naciśnięciem Start.
             this.state.nums = [];
-            this.startGame();
+            this.state.sum = null;
+            nav(this.state.mode === 'spoken' ? 'spoken' : 'flash');
+            this.updateSpeedInfo();
         }
     },
 

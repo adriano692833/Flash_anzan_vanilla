@@ -148,7 +148,16 @@
     const waitMsg = document.getElementById('res-waiting-msg');
 
     // Default state (Single player or Host)
-    if (nextBtn) nextBtn.style.display = 'block';
+    if (nextBtn) {
+      nextBtn.style.display = 'block';
+      if (app.adapter === app.adapters.local && (app.state.mode === 'flash' || app.state.mode === 'spoken')) {
+        nextBtn.innerText = 'Ustaw następne zadanie →';
+      } else if (app.state.mode === 'worksheet') {
+        nextBtn.innerText = 'Nowy arkusz →';
+      } else {
+        nextBtn.innerText = 'Następne zadanie →';
+      }
+    }
     if (waitMsg) waitMsg.style.display = 'none';
 
     if (app.multi && app.multi.roomCode && !app.multi.isHost) {
