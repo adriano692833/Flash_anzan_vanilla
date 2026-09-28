@@ -21,6 +21,7 @@ Thumbs.db
 
 # Pliki tymczasowe
 *.tmp
+TEMP/edge-preview-*/
 
 # Duże zdjęcia referencyjne (66 MB) — trzymane osobno, nie w repo kodu
 kyu 9/

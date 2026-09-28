@@ -291,13 +291,13 @@
             s.on('room_locked', () => {
                 this.roomLocked = true;
                 this.updateLobbyHeader();
-                app.ui.toast('Pokój został zablokowany 🔒', 'info');
+                app.ui.toast('Pokój został zablokowany.', 'info');
             });
 
             s.on('room_unlocked', () => {
                 this.roomLocked = false;
                 this.updateLobbyHeader();
-                app.ui.toast('Pokój został odblokowany 🔓', 'info');
+                app.ui.toast('Pokój został odblokowany.', 'info');
             });
 
             s.on('player_kicked', (d) => {
@@ -332,7 +332,7 @@
                 toast.style.background = 'rgba(15, 23, 42, 0.95)';
                 toast.style.boxShadow = '0 8px 32px rgba(0,0,0,0.5)';
                 toast.innerHTML = `
-                    <div style="font-weight:bold; margin-bottom:0.5rem; color:var(--accent)">🚪 Ktoś puka!</div>
+                    <div style="font-weight:bold; margin-bottom:0.5rem; color:var(--accent)">Prośba o dołączenie</div>
                     <div style="margin-bottom:0.5rem">${he(d.name)} chce dołączyć.</div>
                     <div style="display:flex; gap:0.5rem">
                         <button id="btn-acc-${d.pendingId}" class="btn btn-primary" style="padding:0.3rem 0.6rem; font-size:0.8rem">Wpuść</button>
@@ -474,21 +474,21 @@
             if (!school) {
                 if (onboarding) onboarding.style.display = this.myRole === 'school_admin' ? 'block' : 'none';
                 if (info) info.style.display = 'none';
-                if (teacherSummary) teacherSummary.innerText = '⚠️ Konto nie jest jeszcze przypisane do szkoły — zaloguj się ponownie z kodem zaproszenia administratora.';
+                if (teacherSummary) teacherSummary.innerText = 'Konto nie jest jeszcze przypisane do szkoły — zaloguj się ponownie z kodem zaproszenia administratora.';
                 const dashboard = document.getElementById('admin-dashboard');
                 if (dashboard) dashboard.style.display = 'none';
                 return;
             }
             this.schoolId = school.id;
             this.schoolRole = school.schoolRole || this.schoolRole || 'teacher';
-            if (teacherSummary) teacherSummary.innerText = `🏫 ${school.name || 'Szkoła'} · ${school.status === 'active' ? 'aktywna' : 'nieaktywna'}`;
+            if (teacherSummary) teacherSummary.innerText = `${school.name || 'Szkoła'} · ${school.status === 'active' ? 'aktywna' : 'nieaktywna'}`;
             if (!onboarding || !info) return;
             onboarding.style.display = 'none';
             info.style.display = 'block';
             const isOwner = this.schoolRole === 'owner';
             info.innerHTML = `
                 <div class="report-header">
-                    <div><h2 style="margin:0;">🏫 ${he(school.name || 'Szkoła')}</h2>
+                    <div><h2 style="margin:0;">${he(school.name || 'Szkoła')}</h2>
                     <div class="stat-label">Plan: ${he(school.plan || 'trial')} · ${isOwner ? 'Administrator szkoły' : 'Nauczyciel'}</div></div>
                     <span class="school-status ${school.status === 'active' ? '' : 'is-inactive'}">${school.status === 'active' ? 'Aktywna' : 'Nieaktywna'}</span>
                 </div>
@@ -518,7 +518,7 @@
                 <div><b>${Number(totals.students) || 0}</b><span>Uczniowie</span></div>
                 <div><b>${Number(totals.sessions) || 0}</b><span>Zakończone zajęcia</span></div>`;
             teachersBox.innerHTML = (data.teachers || []).length
-                ? data.teachers.map(teacher => `<div class="admin-staff-card"><b>👨‍🏫 ${he(teacher.name || 'Nauczyciel')}</b><div class="stat-label">Konto nauczyciela</div></div>`).join('')
+                ? data.teachers.map(teacher => `<div class="admin-staff-card"><b>${he(teacher.name || 'Nauczyciel')}</b><div class="stat-label">Konto nauczyciela</div></div>`).join('')
                 : '<div style="color:var(--text-muted)">Brak nauczycieli. Użyj kodu zaproszenia widocznego powyżej.</div>';
             classesBox.innerHTML = (data.classes || []).length
                 ? data.classes.map(item => `
@@ -529,7 +529,7 @@
                             <span class="school-status ${item.active ? '' : 'is-inactive'}">${item.active ? 'Aktywna' : 'Zamknięta'}</span>
                         </div>
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; flex-wrap:wrap;">
-                            <span class="stat-label">👥 ${Number(item.studentCount) || 0} uczniów · 📚 ${Number(item.sessionCount) || 0} zajęć</span>
+                            <span class="stat-label">${Number(item.studentCount) || 0} uczniów · ${Number(item.sessionCount) || 0} zajęć</span>
                             <span style="display:flex; gap:0.35rem; flex-wrap:wrap;">
                                 <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.listClassMembers('${he(item.id)}')">Uczniowie</button>
                                 <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassLeaderboard('${he(item.id)}')">Ranking</button>
@@ -547,7 +547,7 @@
         renderAdminClassLeaderboard: function (classId, board) {
             const box = document.getElementById('admin-ranking-' + classId);
             if (!box) return;
-            box.innerHTML = `<div class="report-panel"><b>🏆 Ranking klasy</b>${(board || []).length
+            box.innerHTML = `<div class="report-panel"><b>Ranking klasy</b>${(board || []).length
                 ? board.map((row, index) => `<div style="display:flex; justify-content:space-between; padding:0.4rem 0; border-bottom:1px solid var(--glass-border);"><span>${index + 1}. ${he(row.name || 'Uczeń')}</span><b>${Number(row.points) || 0} pkt</b></div>`).join('')
                 : '<div style="color:var(--text-muted); margin-top:0.5rem;">Brak wyników.</div>'}</div>`;
         },
@@ -582,9 +582,9 @@
                                 <div><b>${he(c.name)}</b> <span style="color:var(--text-muted)">${he(c.schoolYear || '')}${c.active === false ? ' (zamknięta)' : ''}</span><br>
                                 <span style="font-size:0.85rem">Uczniowie dołączają przez jednorazowe zaproszenia.</span></div>
                                 <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
-                                    <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassLeaderboard('${he(c.id)}')">🏆 Ranking</button>
-                                    <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.listClassMembers('${he(c.id)}')">👥 Uczniowie</button>
-                                    <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassReport('${he(c.id)}')">📊 Raport</button>
+                                    <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassLeaderboard('${he(c.id)}')">Ranking</button>
+                                    <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.listClassMembers('${he(c.id)}')">Uczniowie</button>
+                                    <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassReport('${he(c.id)}')">Raport</button>
                                     <button class="btn btn-danger" style="font-size:0.75rem" onclick="app.multi.closeClass('${he(c.id)}')">Zamknij</button>
                                 </div>
                             </div>
@@ -724,8 +724,8 @@
             const el = document.getElementById('leaderboard-body');
             const title = document.getElementById('leaderboard-title');
             const titles = {
-                class: '🏆 Ranking klasy',
-                global: '🏫 Ranking całej szkoły'
+                class: 'Ranking klasy',
+                global: 'Ranking całej szkoły'
             };
             if (title) title.innerText = titles[scope] || titles.global;
             if (!el) return;
@@ -752,9 +752,9 @@
             if (s) s.style.display = role === 'student' ? 'block' : 'none';
             if (ranking) ranking.style.display = ['school_admin', 'guardian'].includes(role) ? 'none' : 'block';
 
-            const label = role === 'school_admin' ? '🛡️ Właściciel szkoły'
-                : role === 'teacher' ? '👨‍🏫 Nauczyciel'
-                    : role === 'guardian' ? '👪 Opiekun' : '🎓 Uczeń';
+            const label = role === 'school_admin' ? 'Właściciel szkoły'
+                : role === 'teacher' ? 'Nauczyciel'
+                    : role === 'guardian' ? 'Opiekun' : 'Uczeń';
             ['auth-role-badge', 'side-role-badge'].forEach((id) => {
                 const badge = document.getElementById(id);
                 if (!badge) return;
@@ -882,14 +882,14 @@
             const endBtn = document.getElementById('lobby-end-btn');
 
             if (codeEl) {
-                const lockIcon = this.roomLocked ? '🔒' : '';
+                const lockIcon = this.roomLocked ? 'ZABLOKOWANY' : '';
                 codeEl.innerText = `Pokój: ${this.roomCode} ${lockIcon}`;
             }
 
             if (lockBtn) {
                 // Pokazuj tylko hostowi
                 lockBtn.style.display = this.isHost ? 'inline-block' : 'none';
-                lockBtn.innerText = this.roomLocked ? '🔓 Odblokuj' : '🔒 Zablokuj';
+                lockBtn.innerText = this.roomLocked ? 'Odblokuj' : 'Zablokuj';
                 lockBtn.className = this.roomLocked ? 'btn btn-primary' : 'btn btn-secondary';
             }
 
@@ -909,9 +909,9 @@
 
                 el.innerHTML = l.map((p, i) => {
                     let icon = '⏳';
-                    if (p.status === 'thinking') icon = '💭';
-                    if (p.status === 'done') icon = '✅';
-                    if (p.role === 'host') icon = '👑';
+                    if (p.status === 'thinking') icon = '…';
+                    if (p.status === 'done') icon = 'OK';
+                    if (p.role === 'host') icon = 'H';
 
                     let kickHtml = '';
                     if (this.isHost && p.role !== 'host') {
@@ -983,9 +983,9 @@
             grid.innerHTML = players.map(p => {
                 let statusIcon = '⏳';
                 let statusColor = '#888';
-                if (p.status === 'thinking') { statusIcon = '💭'; statusColor = 'var(--warning)'; }
-                if (p.status === 'done') { statusIcon = '✅'; statusColor = 'var(--success)'; }
-                if (p.role === 'host') { statusIcon = '👑'; statusColor = 'gold'; }
+                if (p.status === 'thinking') { statusIcon = '…'; statusColor = 'var(--warning)'; }
+                if (p.status === 'done') { statusIcon = 'OK'; statusColor = 'var(--success)'; }
+                if (p.role === 'host') { statusIcon = 'H'; statusColor = 'var(--secondary)'; }
 
                 return `
                         <div class="glass-card" style="padding:0.5rem; text-align:center; border:1px solid ${statusColor}; min-width: 80px;">

@@ -197,7 +197,7 @@
             this._toggleAuthUI(true);
             const name = this.user.name || '';
             const badge = document.getElementById('auth-user-badge');
-            if (badge) badge.innerText = '👤 ' + name;
+            if (badge) badge.innerText = name;
             const side = document.getElementById('side-user-name');
             if (side) side.innerText = name;
             const verifyBanner = document.getElementById('email-verification-banner');

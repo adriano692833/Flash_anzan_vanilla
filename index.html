@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0b1f3a">
+    <meta name="theme-color" content="#0a0f15">
     <meta name="description" content="Flash Anzan — nowoczesna platforma treningu sorobanu i matematyki mentalnej dla szkół.">
     <title>Flash Anzan — trening sorobanu dla szkół</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/anzan-pro.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+JP:wght@500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -110,16 +110,16 @@
                 <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">XP: <span
                         id="user-xp">0</span></div>
             </div>
-            <nav style="display: flex; flex-direction: column; gap: 0.5rem;">
-                <div class="nav-item active" onclick="nav('dashboard')">🏠 Pulpit</div>
-                <div class="nav-item" onclick="nav('profile')">🏅 Profil</div>
-                <div class="nav-item" onclick="nav('flash')">⚡ Flash</div>
-                <div class="nav-item" onclick="nav('spoken')">🗣️ Głosowy</div>
-                <div class="nav-item" onclick="nav('worksheet')">📝 Arkusz</div>
-                <div class="nav-item" onclick="nav('multiplayer')" style="color: var(--accent);">🌐 Multiplayer</div>
-                <div class="nav-item" onclick="nav('school-operations')">🗓️ Plan szkoły</div>
-                <div class="nav-item" onclick="nav('settings')">⚙️ Ustawienia</div>
-                <div class="nav-item" onclick="app.auth.logout()" style="color:#fca5a5;">🚪 Wyloguj</div>
+            <nav class="primary-nav">
+                <div class="nav-item active" onclick="nav('dashboard')"><span class="nav-index">01</span><span>Pulpit</span></div>
+                <div class="nav-item" onclick="nav('profile')"><span class="nav-index">02</span><span>Profil</span></div>
+                <div class="nav-item" onclick="nav('flash')"><span class="nav-index">03</span><span>Flash</span></div>
+                <div class="nav-item" onclick="nav('spoken')"><span class="nav-index">04</span><span>Głosowy</span></div>
+                <div class="nav-item" onclick="nav('worksheet')"><span class="nav-index">05</span><span>Arkusz</span></div>
+                <div class="nav-item" onclick="nav('multiplayer')"><span class="nav-index">06</span><span>Multiplayer</span></div>
+                <div class="nav-item" onclick="nav('school-operations')"><span class="nav-index">07</span><span>Plan szkoły</span></div>
+                <div class="nav-item" onclick="nav('settings')"><span class="nav-index">08</span><span>Ustawienia</span></div>
+                <div class="nav-item nav-item--logout" onclick="app.auth.logout()"><span class="nav-index">—</span><span>Wyloguj</span></div>
             </nav>
             <div id="app-version" style="margin-top:auto; text-align:center; color:var(--text-muted); font-size:0.8rem">
             </div>
@@ -154,7 +154,7 @@
                     <small>少しずつ、毎日 · Małymi krokami, codziennie</small>
                 </div>
                 <div class="mode-grid">
-                    <button class="mode-card mode-card--flash" onclick="nav('flash')"><span class="mode-icon">⚡</span><span><b>Flash Anzan</b><small>Szybkie obrazy liczb</small></span><i>→</i></button>
+                    <button class="mode-card mode-card--flash" onclick="nav('flash')"><span class="mode-icon">速</span><span><b>Flash Anzan</b><small>Szybkie obrazy liczb</small></span><i>→</i></button>
                     <button class="mode-card mode-card--voice" onclick="nav('spoken')"><span class="mode-icon">声</span><span><b>Trening głosowy</b><small>Licz ze słuchu</small></span><i>→</i></button>
                     <button class="mode-card mode-card--survival" onclick="app.startSurvival()"><span class="mode-icon">炎</span><span><b>Survival</b><small>Sprawdź odporność</small></span><i>→</i></button>
                     <button class="mode-card mode-card--multi" onclick="nav('multiplayer')"><span class="mode-icon">組</span><span><b>Multiplayer</b><small>Trening z klasą</small></span><i>→</i></button>
@@ -175,12 +175,12 @@
             </div>
 
             <div id="profile" class="screen">
-                <h1 style="margin-bottom: 0.5rem;">🏅 Profil</h1>
+                <h1 style="margin-bottom: 0.5rem;">Profil</h1>
                 <p style="color:var(--text-muted); margin-bottom:2rem;">Twoje konto, postępy i odznaki.</p>
 
                 <div class="glass-card" style="margin-bottom:1.5rem;">
                     <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
-                        <div style="font-size:2.5rem;">🧮</div>
+                        <div class="section-glyph">算</div>
                         <div style="flex:1; min-width:180px;">
                             <div id="prof-name" style="font-size:1.4rem; font-weight:700;">—</div>
                             <div id="prof-role" style="color:var(--text-muted); font-size:0.9rem;">—</div>
@@ -263,7 +263,7 @@
                             <div id="game-countdown" style="font-size: 6rem; font-weight: 700;">3</div>
                             <div id="visual-display" class="number-display" style="display: none;"></div>
                             <div id="audio-display" style="display: none;">
-                                <div style="font-size: 4rem; margin-bottom: 1rem;">🔊</div>
+                                <div class="section-glyph section-glyph--large">声</div>
                                 <p>Słuchaj uważnie...</p>
                             </div>
                             <div id="game-input" style="display: none;">
@@ -274,7 +274,7 @@
                                     style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2rem;">
                                     <button class="btn btn-secondary" onclick="nav('dashboard')">Wyjdź</button>
                                     <button class="btn btn-info" style="background: var(--warning); color: black;"
-                                        onclick="app.startGame()" title="Powtórz ten sam przykład">🔄 Powtórz</button>
+                                        onclick="app.startGame()" title="Powtórz ten sam przykład">Powtórz</button>
                                     <button class="btn btn-primary" onclick="app.checkGame()">Sprawdź</button>
                                 </div>
                             </div>
@@ -329,7 +329,7 @@
 
                     <button id="btn-next-task" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;"
                         onclick="app.nextTask()">Następne
-                        Zadanie ➡️</button>
+                        Zadanie →</button>
                     <button id="btn-menu-back" class="btn btn-secondary" style="width: 100%"
                         onclick="nav('dashboard')">Wróć do
                         menu</button>
@@ -346,7 +346,7 @@
                 </header>
 
                 <div id="ws-start-overlay" class="glass-card" style="text-align: center; padding: 3rem;">
-                    <div style="font-size: 3rem; margin-bottom: 1rem;">📝</div>
+                    <div class="section-glyph section-glyph--large">紙</div>
                     <h3>Rozpocznij Test</h3>
                     <div style="margin-bottom: 2rem; text-align: left; max-width: 300px; margin: 0 auto 2rem auto;">
                         <label class="stat-label">Wybierz poziom</label>
@@ -366,7 +366,7 @@
                         <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
                             <input type="number" id="pdf-count" class="input-lg" value="1" min="1" max="50"
                                 style="width: 80px;" title="Liczba stron">
-                            <button class="btn btn-secondary" onclick="app.generatePDF()" style="flex:1;">🖨️ Pobierz
+                            <button class="btn btn-secondary" onclick="app.generatePDF()" style="flex:1;">Pobierz
                                 PDF</button>
                         </div>
                     </div>
@@ -392,7 +392,7 @@
                 <div class="glass-card" style="margin-bottom: 2rem;">
                     <h3 style="margin-bottom: 1rem; color:var(--accent)">Ogólne</h3>
                     <div class="config-row">
-                        <span>🔊 Dźwięki</span>
+                        <span>Dźwięki</span>
                         <input type="checkbox" id="sett-sound" onchange="app.toggleSound(this.checked)"
                             style="transform: scale(1.5);">
                     </div>
@@ -486,8 +486,8 @@
                     <h3 style="margin-bottom: 1rem; color:var(--text-main)">Zarządzanie Danymi</h3>
                     <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:1rem;">Zrób kopię zapasową swoich
                         wyników.</p>
-                    <button class="btn btn-secondary" onclick="app.exportData()">💾 Eksportuj Dane</button>
-                    <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">📂
+                    <button class="btn btn-secondary" onclick="app.exportData()">Eksportuj dane</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">
                         Importuj
                         Dane</button>
                     <input type="file" id="import-file" style="display:none" onchange="app.importData(this)"
@@ -584,7 +584,7 @@
             </div>
 
             <div id="multiplayer" class="screen">
-                <h1 style="margin-bottom: 2rem;">🌐 Multiplayer</h1>
+                <h1 style="margin-bottom: 2rem;">Multiplayer</h1>
 
                 <!-- PO ZALOGOWANIU -->
                 <div id="mp-authed">
@@ -602,7 +602,7 @@
                         <div id="admin-panel" style="display:none;">
                             <div class="glass-card" id="school-card" style="max-width:700px; margin:0 auto 1rem auto; border-left:3px solid var(--secondary);">
                                 <div id="school-onboarding">
-                                    <h2 style="margin-bottom:0.5rem;">🏫 Utwórz organizację szkoły</h2>
+                                    <h2 style="margin-bottom:0.5rem;">Utwórz organizację szkoły</h2>
                                     <p style="color:var(--text-muted); margin-bottom:1rem;">Administrator tworzy szkołę i przekazuje nauczycielom rotowany kod zaproszenia.</p>
                                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                                         <input type="text" id="school-name" class="input-lg" placeholder="Nazwa szkoły" style="flex:1; min-width:220px;">
@@ -619,15 +619,15 @@
                             <div id="admin-dashboard" class="glass-card" style="max-width:900px; margin:0 auto 1.5rem auto; display:none;">
                                 <div class="report-header">
                                     <div>
-                                        <h2 style="margin:0;">📊 Panel właściciela szkoły</h2>
+                                        <h2 style="margin:0;">Panel właściciela szkoły</h2>
                                         <div id="admin-dashboard-status" class="stat-label">Dane całej organizacji</div>
                                     </div>
                                     <button class="btn btn-secondary" onclick="app.multi.requestSchoolDashboard()">Odśwież</button>
                                 </div>
                                 <div id="admin-summary" class="report-kpis"></div>
-                                <h3>👨‍🏫 Nauczyciele</h3>
+                                <h3>Nauczyciele</h3>
                                 <div id="admin-teachers-list" class="admin-staff-grid"></div>
-                                <h3 style="margin-top:1.25rem;">🏫 Klasy, uczniowie i historia zajęć</h3>
+                                <h3 style="margin-top:1.25rem;">Klasy, uczniowie i historia zajęć</h3>
                                 <div id="admin-classes-list"></div>
                             </div>
                         </div>
@@ -644,7 +644,7 @@
                                 </div>
                             </div>
                             <div class="glass-card" style="max-width:700px; margin:0 auto 1.5rem auto;">
-                                <h2 style="margin-bottom:1rem;">👨‍🏫 Moje klasy</h2>
+                                <h2 style="margin-bottom:1rem;">Moje klasy</h2>
                                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
                                     <input type="text" id="class-name" class="input-lg" placeholder="Nazwa klasy" style="flex:2; min-width:140px;">
                                     <input type="text" id="class-year" class="input-lg" placeholder="Rok np. 2025/2026" style="flex:1; min-width:120px;">
@@ -691,7 +691,7 @@
                         <!-- RANKING -->
                         <div id="ranking-panel" class="glass-card" style="max-width:600px; margin:0 auto;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                                <h2 id="leaderboard-title" style="margin:0;">🏆 Ranking</h2>
+                                <h2 id="leaderboard-title" style="margin:0;">Ranking</h2>
                                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                                     <button class="btn btn-secondary" style="font-size:0.8rem" onclick="app.multi.requestClassLeaderboard()">Klasa</button>
                                     <button class="btn btn-secondary" style="font-size:0.8rem" onclick="app.multi.requestGlobalLeaderboard()">Cała szkoła</button>
@@ -714,7 +714,7 @@
                         </div>
                         <div style="display:flex; gap:0.5rem;">
                             <button id="lobby-lock-btn" class="btn btn-secondary" onclick="app.multi.toggleLockRoom()"
-                                style="display:none;">🔒 Zablokuj</button>
+                                style="display:none;">Zablokuj</button>
                             <button id="lobby-start-btn" class="btn btn-primary" onclick="app.multi.startGame()"
                                 style="display: none;">START GRY</button>
                             <button id="lobby-end-btn" class="btn btn-danger" onclick="app.multi.endSession()"
@@ -732,7 +732,7 @@
                 style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; display:none;">
                 <div class="glass-card"
                     style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; max-width:400px; width:90%;">
-                    <div id="surv-icon" style="font-size: 4rem; margin-bottom: 1rem;">💀</div>
+                    <div id="surv-icon" class="section-glyph section-glyph--large">極</div>
                     <h2 id="surv-title" style="margin-bottom: 0.5rem; font-size: 2rem;">Koniec Gry!</h2>
                     <p id="surv-msg" style="color: var(--text-muted); margin-bottom: 2rem; font-size: 1.2rem;"></p>
                     <button class="btn btn-primary" onclick="nav('dashboard')">Wróć do Menu</button>
@@ -745,13 +745,13 @@
         </main>
 
         <div class="mobile-nav">
-            <div class="mobile-nav-item" onclick="nav('dashboard')">🏠</div>
-            <div class="mobile-nav-item" onclick="nav('flash')">⚡</div>
-            <div class="mobile-nav-item" onclick="nav('spoken')">🗣️</div>
-            <div class="mobile-nav-item" onclick="nav('worksheet')">📝</div>
-            <div class="mobile-nav-item" onclick="nav('school-operations')">🗓️</div>
-            <div class="mobile-nav-item" onclick="nav('settings')">⚙️</div>
-            <div class="mobile-nav-item" onclick="app.auth.logout()" title="Wyloguj">🚪</div>
+            <div class="mobile-nav-item" onclick="nav('dashboard')" aria-label="Pulpit">本</div>
+            <div class="mobile-nav-item" onclick="nav('flash')" aria-label="Flash">速</div>
+            <div class="mobile-nav-item" onclick="nav('spoken')" aria-label="Głosowy">声</div>
+            <div class="mobile-nav-item" onclick="nav('worksheet')" aria-label="Arkusz">紙</div>
+            <div class="mobile-nav-item" onclick="nav('school-operations')" aria-label="Plan szkoły">校</div>
+            <div class="mobile-nav-item" onclick="nav('settings')" aria-label="Ustawienia">設</div>
+            <div class="mobile-nav-item" onclick="app.auth.logout()" aria-label="Wyloguj" title="Wyloguj">出</div>
         </div>
     </div>
 

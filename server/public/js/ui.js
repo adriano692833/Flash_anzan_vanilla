@@ -15,8 +15,8 @@
     el.className = `toast-item ${type}`;
 
     let icon = 'ℹ️';
-    if (type === 'success') icon = '✅';
-    if (type === 'error') icon = '⚠️';
+    if (type === 'success') icon = 'OK';
+    if (type === 'error') icon = '!';
 
     const iconEl = document.createElement('span');
     iconEl.style.fontSize = '1.2rem';
@@ -91,7 +91,7 @@
       document.getElementById('res-msg').innerText = 'Weryfikacja...';
       document.getElementById('res-xp-txt').innerText = '';
     } else {
-      document.getElementById('res-icon').innerText = ok ? '🎉' : '❌';
+      document.getElementById('res-icon').innerText = ok ? '正' : '誤';
       document.getElementById('res-msg').innerText = ok ? 'Świetnie!' : 'Błąd';
       document.getElementById('res-xp-txt').innerText = ok ? `+${xp} XP` : '0 XP';
       document.getElementById('res-xp-txt').style.color = ok ? 'var(--success)' : 'var(--text-muted)';

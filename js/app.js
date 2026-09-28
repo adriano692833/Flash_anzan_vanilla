@@ -80,7 +80,7 @@ const KYU_VERSION = 5;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.1.2 Stable Multiplayer';
+const APP_VERSION = '7.2 Structural UI';
 const APP_UPDATED = '2026-09-27';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -468,11 +468,11 @@ const app = {
         list.innerHTML = '';
         const stats = this._accountStats || { xp: this.user.xp, streak: this.user.streak };
         const badges = [
-            { id: 'novice', name: 'Start', icon: '👶', cond: u => u.xp > 50 },
-            { id: 'pro', name: 'Pro', icon: '😎', cond: u => u.xp > 1000 },
-            { id: 'master', name: 'Mistrz', icon: '🏆', cond: u => u.xp > 5000 },
-            { id: 'streak5', name: 'Seria 5', icon: '🔥', cond: u => u.streak >= 5 },
-            { id: 'survivor', name: 'Ocalały', icon: '🛡️', cond: u => this.state.survivalLevel < 9 }
+            { id: 'novice', name: 'Start', icon: '01', cond: u => u.xp > 50 },
+            { id: 'pro', name: 'Pro', icon: '02', cond: u => u.xp > 1000 },
+            { id: 'master', name: 'Mistrz', icon: '03', cond: u => u.xp > 5000 },
+            { id: 'streak5', name: 'Seria 5', icon: '04', cond: u => u.streak >= 5 },
+            { id: 'survivor', name: 'Ocalały', icon: '05', cond: u => this.state.survivalLevel < 9 }
         ];
         badges.forEach(b => {
             const unlocked = b.cond(stats);
@@ -615,7 +615,7 @@ const app = {
                     toast.className = 'glass-card';
                     toast.style.position = 'fixed'; toast.style.top = '20px'; toast.style.right = '20px';
                     toast.style.padding = '1rem'; toast.style.background = 'rgba(16, 185, 129, 0.9)';
-                    toast.innerHTML = `🚀 <b>Poziom w górę!</b> Teraz: ${this.state.survivalLevel} Kyu`;
+                    toast.innerHTML = `<b>Poziom w górę.</b> Teraz: ${this.state.survivalLevel} Kyu`;
                     document.body.appendChild(toast);
                     setTimeout(() => toast.remove(), 3000);
                 }
@@ -733,7 +733,7 @@ const app = {
         rs.style.display = 'block';
         rs.classList.add('active');
 
-        document.getElementById('res-icon').innerText = corr >= 5 ? '🏆' : '👍';
+        document.getElementById('res-icon').innerText = corr >= 5 ? '優' : '良';
         document.getElementById('res-msg').innerText = `Wynik: ${corr}/${this.state.wsExp.length}`;
         document.getElementById('res-xp-txt').innerText = `+${xp} XP`;
 
@@ -986,7 +986,7 @@ const app = {
         if (!select) return;
         const previous = select.value || select.dataset.lastValue || '20';
         const presets = this.customPresets.filter(item => item.game === 'all' || item.game === target);
-        const customOptions = presets.map(item => `<option value="custom:${item.id}">★ ${this._escapeHtml(item.name)}</option>`).join('');
+        const customOptions = presets.map(item => `<option value="custom:${item.id}">Własny · ${this._escapeHtml(item.name)}</option>`).join('');
         const standardOptions = Object.keys(this.kyu).filter(k => /^\d+$/.test(k)).sort((a, b) => b - a)
             .map(k => `<option value="${k}">${this._escapeHtml(this.kyu[k].name || (k + ' Kyū'))}</option>`).join('');
         select.innerHTML = `<option value="__new__">＋ Indywidualny — utwórz własny</option>`
@@ -1245,8 +1245,8 @@ const app = {
         const totalXp = (d.totalXp || 0) + (d.soloXp || 0);
 
         set('prof-name', d.name || '—');
-        const roleLabel = d.role === 'school_admin' ? '🛡️ Administrator szkoły'
-            : d.role === 'teacher' ? '👨‍🏫 Nauczyciel' : '🎓 Uczeń';
+        const roleLabel = d.role === 'school_admin' ? 'Administrator szkoły'
+            : d.role === 'teacher' ? 'Nauczyciel' : 'Uczeń';
         set('prof-role', roleLabel);
         set('prof-class', d.className ? ('Klasa: ' + d.className)
             : d.role === 'student' ? 'Nie należysz jeszcze do klasy' : 'Konto pracownika szkoły');
