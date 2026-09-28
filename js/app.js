@@ -91,7 +91,7 @@ const KYU_VERSION = 6;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.3.5 Kyu Result Override';
+const APP_VERSION = '7.4 Student Training Flow';
 const APP_UPDATED = '2026-09-28';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -126,7 +126,7 @@ const app = {
     kyu: null,
     customPresets: [],
     user: { xp: 0, level: 1, streak: 0, settings: { sound: true, wsTime: 5 } },
-    state: { mode: '', nums: [], sum: null, idx: 0, timer: null, wsExp: [], checked: false, maxResult: null },
+    state: { mode: '', nums: [], sum: null, idx: 0, timer: null, wsExp: [], checked: false, maxResult: null, termCount: null, countdownTimer: null, sequenceTimer: null, roundToken: 0, survivalConfig: null },
 
     multi: null,
 
@@ -221,6 +221,7 @@ const app = {
         document.getElementById('game-kyu').addEventListener('change', () => this.updateGameInfo());
         document.getElementById('game-speed').addEventListener('change', () => this.updateSpeedInfo());
         document.getElementById('game-max-result').addEventListener('input', () => this.updateMaxResultInfo());
+        document.getElementById('game-terms').addEventListener('input', () => this.updateRoundConfigInfo());
         this.updateGameInfo();
 
         // --- MOBILE NAV GESTURES ---
@@ -313,6 +314,32 @@ const app = {
 
     // --- GAME ---
 
+    _stopRoundTimers: function () {
+        if (this.state.countdownTimer) clearInterval(this.state.countdownTimer);
+        if (this.state.sequenceTimer) clearTimeout(this.state.sequenceTimer);
+        this.state.countdownTimer = null;
+        this.state.sequenceTimer = null;
+        if (audio.hasVoiceSupport()) window.speechSynthesis.cancel();
+    },
+
+    cancelGame: function () {
+        const serverDriven = !!(this.adapter && this.adapters && this.adapter !== this.adapters.local);
+        if (serverDriven) return;
+        this.state.roundToken = (this.state.roundToken || 0) + 1;
+        this._stopRoundTimers();
+        this.state.nums = [];
+        this.state.sum = null;
+        this.state.checked = false;
+        if (this.state.mode === 'survival') {
+            this.closeSurvivalSetup();
+            nav('dashboard');
+        } else {
+            nav(this.state.mode === 'spoken' ? 'spoken' : 'flash');
+            this.updateRoundConfigInfo();
+        }
+        app.ui.toast('Trening anulowany.', 'info');
+    },
+
     startGame: function () {
         let kId = document.getElementById('game-kyu').value;
 
@@ -352,6 +379,21 @@ const app = {
             return;
         }
         let cfg = baseCfg;
+        if (this.state.mode === 'survival' && this.state.survivalConfig) {
+            const survival = this.state.survivalConfig;
+            cfg = Object.assign({}, baseCfg);
+            if (survival.operation && survival.operation !== 'kyu') {
+                cfg.m = survival.operation;
+                cfg.ops = { add: survival.operation === 'add' || survival.operation === 'mixed', sub: survival.operation === 'mixed' };
+                if (survival.operation === 'mul' || survival.operation === 'div') delete cfg.requiredAbsValue;
+            }
+            if (survival.terms !== null && cfg.m !== 'mul' && cfg.m !== 'div') cfg.o = survival.terms;
+            if (survival.time !== null) cfg.t = survival.time;
+            if (survival.maxResult !== null) {
+                const saved = Number.isSafeInteger(Number(baseCfg.maxResult)) ? Number(baseCfg.maxResult) : null;
+                cfg.maxResult = saved === null ? survival.maxResult : Math.min(saved, survival.maxResult);
+            }
+        }
         // const noNeg = cfg.noNeg === undefined ? true : cfg.noNeg; // Handled internally now
 
         // Wybrana prędkość jest ustawieniem sesji treningowej i nie może wracać
@@ -364,6 +406,20 @@ const app = {
             this.state.flashSpeed = spEl ? (parseFloat(spEl.value) || cfg.t) : cfg.t;
         } else if (!Number.isFinite(Number(this.state.flashSpeed)) || Number(this.state.flashSpeed) <= 0) {
             this.state.flashSpeed = cfg.t;
+        }
+
+        // Każdy poziom Kyu może dostać dokładną liczbę składników na czas tej
+        // sesji. Mnożenie i dzielenie zawsze mają dwa operandy.
+        if (!serverDriven && this.state.mode !== 'survival' && cfg.m !== 'mul' && cfg.m !== 'div') {
+            if (fromLocalSetup) {
+                const terms = Number(document.getElementById('game-terms')?.value);
+                if (!Number.isInteger(terms) || terms < 2 || terms > 50) {
+                    app.ui.toast('Liczba składników musi mieścić się w zakresie 2–50.', 'warning');
+                    return;
+                }
+                this.state.termCount = terms;
+            }
+            if (Number.isInteger(this.state.termCount)) cfg = Object.assign({}, cfg, { o: this.state.termCount });
         }
 
         // Limit wyniku działa jak prędkość: można go zmienić dla zwykłego Kyu
@@ -387,7 +443,24 @@ const app = {
             const effectiveLimit = savedLimit !== null && requestedLimit !== null
                 ? Math.min(savedLimit, requestedLimit)
                 : (savedLimit !== null ? savedLimit : requestedLimit);
-            if (effectiveLimit !== null) cfg = Object.assign({}, baseCfg, { maxResult: effectiveLimit });
+            if (effectiveLimit !== null) cfg = Object.assign({}, cfg, { maxResult: effectiveLimit });
+        }
+
+        // Zanim uczeń rozpocznie sesję, upewnij się, że ręcznie ustawiona liczba
+        // składników i limit pozwalają zachować twardą zasadę 10 rund bez powtórki.
+        if (fromLocalSetup) {
+            let supportsWindow = false;
+            for (let attempt = 0; attempt < 3 && !supportsWindow; attempt++) {
+                try {
+                    const probeHistory = [];
+                    for (let round = 0; round < 11; round++) window.SorobanGen.generateSequence(cfg, { history: probeHistory });
+                    supportsWindow = true;
+                } catch (_) { /* kolejna próba ogranicza wpływ losowania */ }
+            }
+            if (!supportsWindow) {
+                app.ui.toast('Ta liczba składników i limit dają zbyt mało różnych zadań. Zmniejsz liczbę składników albo zwiększ limit wyniku.', 'warning');
+                return;
+            }
         }
 
         try {
@@ -430,16 +503,30 @@ const app = {
         document.getElementById('game-input').style.display = 'none';
         document.getElementById('visual-display').style.display = 'none';
         document.getElementById('audio-display').style.display = 'none';
+        const cancelButton = document.getElementById('game-cancel-btn');
+        if (cancelButton) cancelButton.style.display = serverDriven ? 'none' : 'block';
+
+        this._stopRoundTimers();
+        const roundToken = (this.state.roundToken || 0) + 1;
+        this.state.roundToken = roundToken;
 
         let c = 3;
         const el = document.getElementById('game-countdown');
+        const phase = document.getElementById('game-phase-label');
+        const counter = document.getElementById('game-counter');
+        if (phase) phase.innerText = 'START ZA';
+        if (counter) counter.innerText = 'PRZYGOTUJ SIĘ';
         el.style.display = 'block'; el.innerText = c;
-        const inv = setInterval(() => {
+        this.state.countdownTimer = setInterval(() => {
+            if (roundToken !== this.state.roundToken) return;
             audio.beep(); c--;
             if (c > 0) el.innerText = c;
             else {
-                clearInterval(inv); audio.startBeep();
+                clearInterval(this.state.countdownTimer);
+                this.state.countdownTimer = null;
+                audio.startBeep();
                 el.style.display = 'none';
+                if (phase) phase.innerText = this.state.mode === 'spoken' ? 'SERIA GŁOSOWA' : 'SERIA LICZB';
 
 
 
@@ -449,17 +536,111 @@ const app = {
 
                 // Always run sequence
                 this.state.idx = 0;
-                this.runSequence(cfg);
+                this.runSequence(cfg, roundToken);
             }
         }, 1000);
     },
 
     // --- EXTRAS ---
+    openSurvivalSetup: function () {
+        const options = Object.keys(this.kyu).filter(k => /^\d+$/.test(k)).sort((a, b) => b - a)
+            .map(k => `<option value="${k}">${this._escapeHtml(this.kyu[k].name || (k + ' Kyū'))}</option>`).join('');
+        const start = document.getElementById('surv-start-kyu');
+        const end = document.getElementById('surv-end-kyu');
+        if (start) start.innerHTML = options;
+        if (end) end.innerHTML = options;
+        const saved = this.state.survivalConfig || { startKyu: 20, endKyu: 1, stepRounds: 3, operation: 'kyu', terms: null, time: null, maxResult: null };
+        if (start) start.value = String(saved.startKyu);
+        if (end) end.value = String(saved.endKyu);
+        document.getElementById('surv-step-rounds').value = saved.stepRounds;
+        document.getElementById('surv-operation').value = saved.operation || 'kyu';
+        document.getElementById('surv-terms').value = saved.terms === null ? '' : saved.terms;
+        document.getElementById('surv-time').value = saved.time === null ? '' : saved.time;
+        document.getElementById('surv-max-result').value = saved.maxResult === null ? '' : saved.maxResult;
+        this.updateSurvivalConfigFields();
+        const resultModal = document.getElementById('survival-modal');
+        if (resultModal) resultModal.style.display = 'none';
+        document.getElementById('survival-setup-modal').style.display = 'flex';
+    },
+
+    closeSurvivalSetup: function () {
+        const modal = document.getElementById('survival-setup-modal');
+        if (modal) modal.style.display = 'none';
+    },
+
+    updateSurvivalConfigFields: function () {
+        const operation = document.getElementById('surv-operation')?.value || 'kyu';
+        const terms = document.getElementById('surv-terms');
+        if (!terms) return;
+        const fixedOperands = operation === 'mul' || operation === 'div';
+        terms.disabled = fixedOperands;
+        terms.placeholder = fixedOperands ? 'Stałe: 2 operandy' : 'Puste = według Kyu';
+        if (fixedOperands) terms.value = '';
+    },
+
     startSurvival: function () {
+        const optional = id => {
+            const raw = String(document.getElementById(id)?.value || '').trim();
+            return raw === '' ? null : Number(raw);
+        };
+        const startKyu = Number(document.getElementById('surv-start-kyu')?.value);
+        const endKyu = Number(document.getElementById('surv-end-kyu')?.value);
+        const stepRounds = Number(document.getElementById('surv-step-rounds')?.value);
+        const operation = document.getElementById('surv-operation')?.value || 'kyu';
+        const terms = optional('surv-terms');
+        const time = optional('surv-time');
+        const maxResult = optional('surv-max-result');
+        if (!Number.isInteger(startKyu) || !Number.isInteger(endKyu) || startKyu < endKyu || startKyu > 20 || endKyu < 1) {
+            return app.ui.toast('Poziom początkowy musi być łatwiejszy lub równy poziomowi końcowemu.', 'warning');
+        }
+        if (!Number.isInteger(stepRounds) || stepRounds < 1 || stepRounds > 20) {
+            return app.ui.toast('Awans ustaw w zakresie 1–20 poprawnych odpowiedzi.', 'warning');
+        }
+        if (!['kyu', 'add', 'mixed', 'mul', 'div'].includes(operation)) {
+            return app.ui.toast('Wybierz prawidłowy rodzaj zadań Survival.', 'warning');
+        }
+        if (terms !== null && (!Number.isInteger(terms) || terms < 2 || terms > 50)) {
+            return app.ui.toast('Liczba składników Survival musi mieścić się w zakresie 2–50.', 'warning');
+        }
+        if (time !== null && (!Number.isFinite(time) || time < 0.1 || time > 60)) {
+            return app.ui.toast('Czas Survival musi mieścić się w zakresie 0,1–60 s.', 'warning');
+        }
+        if (maxResult !== null && (!Number.isSafeInteger(maxResult) || maxResult < 1)) {
+            return app.ui.toast('Limit wyniku Survival musi być dodatnią liczbą całkowitą.', 'warning');
+        }
+        const config = { startKyu, endKyu, stepRounds, operation, terms, time, maxResult };
+        try {
+            for (let level = startKyu; level >= endKyu; level--) {
+                const base = this.getTrainingConfig(String(level));
+                const probe = Object.assign({}, base);
+                if (operation !== 'kyu') {
+                    probe.m = operation;
+                    probe.ops = { add: operation === 'add' || operation === 'mixed', sub: operation === 'mixed' };
+                    if (operation === 'mul' || operation === 'div') delete probe.requiredAbsValue;
+                }
+                if (terms !== null && probe.m !== 'mul' && probe.m !== 'div') probe.o = terms;
+                if (time !== null) probe.t = time;
+                if (maxResult !== null) probe.maxResult = maxResult;
+                let viable = false;
+                for (let attempt = 0; attempt < 3 && !viable; attempt++) {
+                    try {
+                        const history = [];
+                        for (let round = 0; round < 11; round++) window.SorobanGen.generateSequence(probe, { history });
+                        viable = true;
+                    } catch (_) { /* spróbuj ponownie z inną ścieżką losowania */ }
+                }
+                if (!viable) throw new Error('insufficient-task-pool');
+            }
+        } catch (error) {
+            return app.ui.toast('Te ustawienia nie zapewniają 11 różnych zadań na każdym wybranym Kyu. Zwiększ limit albo zmień liczbę składników lub rodzaj działań.', 'warning');
+        }
+        this.state.survivalConfig = config;
         this.state.mode = 'survival';
-        this.state.survivalLevel = 20;
+        this.state.survivalLevel = startKyu;
         this.state.survivalStreak = 0;
-        app.ui.modal("Tryb Survival", "Grasz do pierwszego błędu. Poziom rośnie co 3 wygrane. Powodzenia!");
+        this.state.nums = [];
+        this.state.sum = null;
+        this.closeSurvivalSetup();
         this.startGame();
     },
 
@@ -530,7 +711,8 @@ const app = {
         });
     },
 
-    runSequence: function (cfg) {
+    runSequence: function (cfg, roundToken) {
+        if (roundToken !== this.state.roundToken) return;
         if (this.state.idx >= this.state.nums.length) {
             // Capture start time (use global app reference for safety)
             app.state.startTime = Date.now();
@@ -538,12 +720,17 @@ const app = {
             document.getElementById('visual-display').style.display = 'none';
             document.getElementById('audio-display').style.display = 'none';
             document.getElementById('game-input').style.display = 'block'; // FIX: Pokaż input
+            const phase = document.getElementById('game-phase-label');
+            const counter = document.getElementById('game-counter');
+            if (phase) phase.innerText = 'PODAJ WYNIK';
+            if (counter) counter.innerText = `KONIEC SERII · ${this.state.nums.length} LICZB`;
             document.getElementById('game-answer').value = '';
             document.getElementById('game-answer').focus();
             return;
         }
         const n = this.state.nums[this.state.idx];
-        // document.getElementById('game-counter').innerText = `${this.state.idx + 1}/${this.state.nums.length}`;
+        const counter = document.getElementById('game-counter');
+        if (counter) counter.innerText = `LICZBA ${this.state.idx + 1} Z ${this.state.nums.length}`;
 
         if (this.state.mode !== 'spoken') {
             const v = document.getElementById('visual-display');
@@ -553,9 +740,10 @@ const app = {
             // częścią tego czasu, a nie ukrytą dopłatą 150 ms do konfiguracji.
             const intervalMs = Math.max(100, Number(this.state.flashSpeed || cfg.t) * 1000);
             const gapMs = Math.min(150, Math.max(20, intervalMs * 0.15));
-            setTimeout(() => {
+            this.state.sequenceTimer = setTimeout(() => {
+                if (roundToken !== this.state.roundToken) return;
                 v.innerText = ''; this.state.idx++;
-                setTimeout(() => this.runSequence(cfg), gapMs);
+                this.state.sequenceTimer = setTimeout(() => this.runSequence(cfg, roundToken), gapMs);
             }, intervalMs - gapMs);
         } else {
             const a = document.getElementById('audio-display');
@@ -563,11 +751,11 @@ const app = {
             this.state.idx++;
             const startedAt = Date.now();
             const intervalMs = Math.max(100, Number(this.state.flashSpeed || cfg.t) * 1000);
-            const next = () => setTimeout(
-                () => this.runSequence(cfg),
+            const next = () => this.state.sequenceTimer = setTimeout(
+                () => this.runSequence(cfg, roundToken),
                 Math.max(0, intervalMs - (Date.now() - startedAt))
             );
-            if (!audio.speak(n.toString(), next)) setTimeout(() => this.runSequence(cfg), intervalMs);
+            if (!audio.speak(n.toString(), next)) this.state.sequenceTimer = setTimeout(() => this.runSequence(cfg, roundToken), intervalMs);
         }
     },
 
@@ -662,7 +850,8 @@ const app = {
             } else {
                 // Zwiększ trudność
                 this.state.survivalStreak++;
-                if (this.state.survivalStreak % 3 === 0 && this.state.survivalLevel > 1) {
+                const survival = this.state.survivalConfig || { endKyu: 1, stepRounds: 3 };
+                if (this.state.survivalStreak % survival.stepRounds === 0 && this.state.survivalLevel > survival.endKyu) {
                     this.state.survivalLevel--;
                     // TOAST notification for Level UP
                     const toast = document.createElement('div');
@@ -1322,6 +1511,18 @@ const app = {
             sp.value = exact;
         }
 
+        const termsInput = document.getElementById('game-terms');
+        if (termsInput) {
+            const fixedOperands = c.m === 'mul' || c.m === 'div';
+            // Dla poziomu z przedziałem wybieramy najniższą zalecaną wartość.
+            // Na początkujących Kyu górna wartość (np. 5 liczb przy wyniku <= 9)
+            // może nie zapewniać 11 unikalnych rund o dokładnie tej samej długości.
+            const defaultTerms = fixedOperands ? 2 : (typeof c.o === 'object' ? c.o.min : c.o);
+            termsInput.disabled = fixedOperands;
+            termsInput.value = defaultTerms;
+            this.state.termCount = Number(defaultTerms);
+        }
+
         document.getElementById('info-d').innerText = dStr;
         document.getElementById('info-o').innerText = oStr;
         const rangeText = c.m === 'mul' && c.mul ? `${c.mul.a.min}–${c.mul.a.max} × ${c.mul.b.min}–${c.mul.b.max}`
@@ -1344,8 +1545,12 @@ const app = {
         }
         // Jednostka "s" jest w znaczniku HTML — tu tylko wartość
         document.getElementById('info-t').innerText = sp ? parseFloat(sp.value) : c.t;
+        this.updateRoundConfigInfo();
     },
     updateMaxResultInfo: function () {
+        this.updateRoundConfigInfo();
+    },
+    updateRoundConfigInfo: function () {
         const select = document.getElementById('game-kyu');
         const input = document.getElementById('game-max-result');
         const output = document.getElementById('info-max-result');
@@ -1357,8 +1562,15 @@ const app = {
         const saved = Number.isSafeInteger(Number(base.maxResult)) ? Number(base.maxResult) : null;
         const effective = saved !== null && Number.isSafeInteger(requested) ? Math.min(saved, requested)
             : (saved !== null ? saved : requested);
-        const cfg = Number.isSafeInteger(effective) && effective >= 1
-            ? Object.assign({}, base, { maxResult: effective }) : base;
+        let cfg = Number.isSafeInteger(effective) && effective >= 1
+            ? Object.assign({}, base, { maxResult: effective }) : Object.assign({}, base);
+        const termsInput = document.getElementById('game-terms');
+        const terms = Number(termsInput && termsInput.value);
+        if (cfg.m !== 'mul' && cfg.m !== 'div' && Number.isInteger(terms) && terms >= 2 && terms <= 50) {
+            cfg.o = terms;
+            const count = document.getElementById('info-o');
+            if (count) count.innerText = terms;
+        }
         output.innerText = this.trainingMaximum(cfg).label;
     },
     // Odśwież pole "Czas" po ręcznej zmianie suwaka prędkości
@@ -1595,6 +1807,12 @@ const app = {
 window.app = app;
 
 function nav(id) {
+    const activeRun = document.getElementById('game-run');
+    const localRound = app.adapter === app.adapters.local;
+    if (activeRun && activeRun.style.display !== 'none' && localRound) {
+        app.state.roundToken = (app.state.roundToken || 0) + 1;
+        app._stopRoundTimers();
+    }
     // Reset wszystkich ekranów (ukrycie)
     document.querySelectorAll('.screen').forEach(s => {
         s.style.display = 'none'; // Wymuszenie inline

@@ -156,7 +156,7 @@
                 <div class="mode-grid">
                     <button class="mode-card mode-card--flash" onclick="nav('flash')"><span class="mode-icon">速</span><span><b>Flash Anzan</b><small>Szybkie obrazy liczb</small></span><i>→</i></button>
                     <button class="mode-card mode-card--voice" onclick="nav('spoken')"><span class="mode-icon">声</span><span><b>Trening głosowy</b><small>Licz ze słuchu</small></span><i>→</i></button>
-                    <button class="mode-card mode-card--survival" onclick="app.startSurvival()"><span class="mode-icon">炎</span><span><b>Survival</b><small>Sprawdź odporność</small></span><i>→</i></button>
+                    <button class="mode-card mode-card--survival" onclick="app.openSurvivalSetup()"><span class="mode-icon">炎</span><span><b>Survival</b><small>Sprawdź odporność</small></span><i>→</i></button>
                     <button class="mode-card mode-card--multi" onclick="nav('multiplayer')"><span class="mode-icon">組</span><span><b>Multiplayer</b><small>Trening z klasą</small></span><i>→</i></button>
                     <button class="mode-card mode-card--sheet" onclick="nav('worksheet')"><span class="mode-icon">紙</span><span><b>Arkusze</b><small>Praca własnym tempem</small></span><i>→</i></button>
                 </div>
@@ -243,6 +243,10 @@
                             <label class="stat-label">Prędkość (czas wyświetlania)</label>
                             <select id="game-speed" class="input-lg" style="margin-bottom: 1rem;"></select>
 
+                            <label class="stat-label">Liczba składników</label>
+                            <input id="game-terms" type="number" min="2" max="50" step="1" class="input-lg"
+                                style="margin-bottom: 1rem;" onchange="app.updateRoundConfigInfo()">
+
                             <label class="stat-label">Limit wyniku końcowego</label>
                             <input id="game-max-result" type="number" min="1" max="9007199254740991" step="1"
                                 class="input-lg" style="margin-bottom: 0.4rem;" onchange="app.updateMaxResultInfo()">
@@ -264,8 +268,12 @@
                     <div id="game-run" style="display: none;">
                         <div class="glass-card"
                             style="min-height: 400px; display: flex; flex-direction: column; justify-content: center; position: relative;">
+                            <button id="game-cancel-btn" class="btn btn-secondary" type="button"
+                                style="position:absolute; top:1rem; left:1rem; z-index:2; padding:0.55rem 0.8rem;"
+                                onclick="app.cancelGame()">Anuluj</button>
                             <div id="game-counter"
                                 style="position: absolute; top: 1rem; right: 1rem; color: var(--text-muted);"></div>
+                            <div id="game-phase-label" class="eyebrow-label" style="margin-bottom:0.75rem;">START ZA</div>
                             <div id="game-countdown" style="font-size: 6rem; font-weight: 700;">3</div>
                             <div id="visual-display" class="number-display" style="display: none;"></div>
                             <div id="audio-display" style="display: none;">
@@ -747,7 +755,7 @@
                     <button class="btn btn-primary" onclick="nav('dashboard')">Wróć do Menu</button>
                     <button class="btn btn-secondary"
                         style="margin-top:10px; background:transparent; border:1px solid var(--accent); color:var(--accent)"
-                        onclick="app.startSurvival()">Zagraj Ponownie</button>
+                        onclick="app.openSurvivalSetup()">Zagraj Ponownie</button>
                 </div>
             </div>
 
@@ -761,6 +769,26 @@
             <div class="mobile-nav-item" onclick="nav('school-operations')" aria-label="Plan szkoły">校</div>
             <div class="mobile-nav-item" onclick="nav('settings')" aria-label="Ustawienia">設</div>
             <div class="mobile-nav-item" onclick="app.auth.logout()" aria-label="Wyloguj" title="Wyloguj">出</div>
+        </div>
+    </div>
+
+    <div id="survival-setup-modal" class="custom-config-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="survival-setup-title">
+        <div class="custom-config-dialog" style="max-width:760px;">
+            <div class="custom-config-header">
+                <div><span class="eyebrow-label">TRYB SURVIVAL</span><h2 id="survival-setup-title">Skonfiguruj wyzwanie</h2></div>
+                <button class="icon-button" onclick="app.closeSurvivalSetup()" aria-label="Zamknij">×</button>
+            </div>
+            <div class="custom-config-grid">
+                <label class="custom-field"><span>Poziom początkowy</span><select id="surv-start-kyu" class="input-lg"></select></label>
+                <label class="custom-field"><span>Najtrudniejszy poziom</span><select id="surv-end-kyu" class="input-lg"></select></label>
+                <label class="custom-field"><span>Poprawnych odpowiedzi do awansu</span><input id="surv-step-rounds" type="number" min="1" max="20" step="1" class="input-lg" value="3"></label>
+                <label class="custom-field"><span>Rodzaj zadań</span><select id="surv-operation" class="input-lg" onchange="app.updateSurvivalConfigFields()"><option value="kyu">Według wybranego Kyu</option><option value="add">Tylko dodawanie</option><option value="mixed">Dodawanie i odejmowanie</option><option value="mul">Mnożenie</option><option value="div">Dzielenie</option></select></label>
+                <label class="custom-field"><span>Liczba składników</span><input id="surv-terms" type="number" min="2" max="50" step="1" class="input-lg" placeholder="Puste = według Kyu"></label>
+                <label class="custom-field"><span>Czas jednej liczby (s)</span><input id="surv-time" type="number" min="0.1" max="60" step="0.1" class="input-lg" placeholder="Puste = według Kyu"></label>
+                <label class="custom-field"><span>Limit wyniku końcowego</span><input id="surv-max-result" type="number" min="1" max="9007199254740991" step="1" class="input-lg" placeholder="Puste = według Kyu"></label>
+            </div>
+            <p class="custom-config-note">Pojawiają się wyłącznie zadania z wybranego przedziału Kyu i rodzaju działań. Po każdej określonej liczbie poprawnych odpowiedzi poziom rośnie o jeden.</p>
+            <div class="custom-config-actions"><button class="btn btn-secondary" onclick="app.closeSurvivalSetup()">Anuluj</button><button class="btn btn-primary" onclick="app.startSurvival()">Rozpocznij Survival</button></div>
         </div>
     </div>
 
