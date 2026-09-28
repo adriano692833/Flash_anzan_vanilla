@@ -91,7 +91,7 @@ const KYU_VERSION = 6;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.3.3 Maximum Result Preview';
+const APP_VERSION = '7.3.4 Configurable Result Limit';
 const APP_UPDATED = '2026-09-28';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -1026,6 +1026,8 @@ const app = {
                 m: operation,
                 ops: { add: operation !== 'div' && operation !== 'mul', sub: operation === 'mixed' }
             };
+            const maxResult = Number(source.maxResult);
+            if (Number.isSafeInteger(maxResult) && maxResult >= 1) config.maxResult = maxResult;
             if (operation === 'mul') {
                 config.mul = { a: range(source.mul && source.mul.a, 1, 9), b: range(source.mul && source.mul.b, 2, 9) };
             } else if (operation === 'div') {
@@ -1096,6 +1098,7 @@ const app = {
         set('custom-operation', config ? config.m : 'add');
         set('custom-terms', config ? (typeof config.o === 'object' ? config.o.max : config.o) : 5);
         set('custom-time', config ? config.t : 2);
+        set('custom-max-result', config && Number.isSafeInteger(config.maxResult) ? config.maxResult : '');
         set('custom-tier', config ? config.tier : 'full');
 
         if (config && config.m === 'mul') {
@@ -1156,6 +1159,8 @@ const app = {
         const bMax = Math.floor(readNumber('custom-range-b-max'));
         const terms = Math.floor(readNumber('custom-terms'));
         const time = readNumber('custom-time');
+        const maxResultRaw = String(document.getElementById('custom-max-result')?.value || '').trim();
+        const maxResult = maxResultRaw === '' ? null : Number(maxResultRaw);
         if (!name) return app.ui.toast('Nadaj konfiguracji nazwę.', 'warning');
         if (![aMin, aMax, terms, time].every(Number.isFinite) || aMin < 1 || aMax < aMin || aMax > 99999999) {
             return app.ui.toast('Popraw pierwszy zakres liczb.', 'warning');
@@ -1165,6 +1170,9 @@ const app = {
         }
         if ((operation === 'mul' || operation === 'div') && aMax * bMax > Number.MAX_SAFE_INTEGER) {
             return app.ui.toast('Zakres jest zbyt duży — wynik nie byłby liczony dokładnie. Zmniejsz jedną z górnych granic.', 'warning');
+        }
+        if (maxResult !== null && (!Number.isSafeInteger(maxResult) || maxResult < 1)) {
+            return app.ui.toast('Limit wyniku musi być dodatnią liczbą całkowitą.', 'warning');
         }
         const hasSecondRange = operation === 'mul' || operation === 'div';
         if ((!hasSecondRange && (terms < 2 || terms > 50)) || time < 0.1 || time > 60) {
@@ -1176,6 +1184,7 @@ const app = {
             d: Math.min(8, String(aMax).length), o: hasSecondRange ? 2 : terms, t: time, m: operation,
             ops: { add: operation === 'add' || operation === 'mixed', sub: operation === 'mixed' }
         };
+        if (maxResult !== null) config.maxResult = maxResult;
         if (operation === 'mul') config.mul = { a: { min: aMin, max: aMax }, b: { min: bMin, max: bMax } };
         else if (operation === 'div') config.div = { divisor: { min: aMin, max: aMax }, quotient: { min: bMin, max: bMax } };
         else config.range = { min: aMin, max: aMax };
@@ -1189,7 +1198,7 @@ const app = {
             }
         } catch (error) { valid = false; }
         if (!valid) {
-            return app.ui.toast('Ta konfiguracja nie zapewnia 11 różnych pełnych zadań. Zwiększ zakres, zmień technikę lub liczbę składników.', 'warning');
+            return app.ui.toast('Ta konfiguracja nie zapewnia 11 różnych pełnych zadań. Zwiększ zakres, podnieś limit wyniku albo zmień technikę lub liczbę składników.', 'warning');
         }
 
         const id = this._editingPresetId || `preset_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -1246,7 +1255,8 @@ const app = {
             else rangeText = `${cfg.range.min}–${cfg.range.max}`;
             const countText = (cfg.m === 'mul' || cfg.m === 'div') ? '2 operandy' : `${cfg.o} składników`;
             const maxResult = this.trainingMaximum(cfg);
-            return `<article class="custom-preset-card"><div class="custom-preset-card-header"><h4>${this._escapeHtml(item.name)}</h4><span class="preset-badge">${gameLabels[item.game] || 'Wszystkie'}</span></div><p>${opLabels[cfg.m] || cfg.m} · zakres ${rangeText} · ${countText} · ${cfg.t} s · maks. wynik ${maxResult.label}</p><div class="custom-preset-actions"><button class="btn btn-secondary" onclick="app.openCustomConfig('${item.game}', '', '${item.id}')">Edytuj</button><button class="btn btn-danger" onclick="app.deleteCustomConfig('${item.id}')">Usuń</button></div></article>`;
+            const limitText = Number.isSafeInteger(cfg.maxResult) ? ` · ustawiony limit ${cfg.maxResult.toLocaleString('pl-PL')}` : '';
+            return `<article class="custom-preset-card"><div class="custom-preset-card-header"><h4>${this._escapeHtml(item.name)}</h4><span class="preset-badge">${gameLabels[item.game] || 'Wszystkie'}</span></div><p>${opLabels[cfg.m] || cfg.m} · zakres ${rangeText} · ${countText} · ${cfg.t} s${limitText} · maks. wynik ${maxResult.label}</p><div class="custom-preset-actions"><button class="btn btn-secondary" onclick="app.openCustomConfig('${item.game}', '', '${item.id}')">Edytuj</button><button class="btn btn-danger" onclick="app.deleteCustomConfig('${item.id}')">Usuń</button></div></article>`;
         }).join('');
     },
     trainingMaximum: function (config) {

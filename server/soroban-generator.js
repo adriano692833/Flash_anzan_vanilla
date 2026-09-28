@@ -265,15 +265,18 @@
     // pozostałych działań maksimum wynika bezpośrednio z granic konfiguracji.
     function maxPossibleResult(cfg) {
         const mode = cfg.m || 'add';
+        const configuredLimit = Number.isSafeInteger(Number(cfg.maxResult)) && Number(cfg.maxResult) >= 1
+            ? Number(cfg.maxResult) : null;
         if (mode === 'mul') {
             const d = resolveDigits(cfg);
             const aMax = cfg.mul && cfg.mul.a ? Number(cfg.mul.a.max) : Math.pow(10, d) - 1;
             const bMax = cfg.mul && cfg.mul.b ? Number(cfg.mul.b.max) : 9;
-            return { value: aMax * bMax, exact: Number.isSafeInteger(aMax * bMax) };
+            const natural = aMax * bMax;
+            return { value: configuredLimit === null ? natural : Math.min(natural, configuredLimit), exact: Number.isSafeInteger(natural) && (configuredLimit === null || configuredLimit >= natural) };
         }
         if (mode === 'div') {
             const qMax = cfg.div && cfg.div.quotient ? Number(cfg.div.quotient.max) : 9;
-            return { value: qMax, exact: true };
+            return { value: configuredLimit === null ? qMax : Math.min(qMax, configuredLimit), exact: configuredLimit === null || configuredLimit >= qMax };
         }
 
         const digits = resolveDigits(cfg);
@@ -300,6 +303,7 @@
                             const result = applyTerm(rods, value, op);
                             if (!result.ok || result.tier > tierLimit) continue;
                             const total = state.total + (op === '-' ? -value : value);
+                            if (configuredLimit !== null && total > configuredLimit) continue;
                             const hasRequired = state.required || (Number.isFinite(required) && value === required);
                             next.set(total + ':' + hasRequired, { total, required: hasRequired });
                         }
@@ -316,8 +320,9 @@
             return { value: maximum, exact: true };
         }
 
-        const value = maxTerms * termMax;
-        return { value, exact: tierLimit >= TIER.friend10 && Number.isSafeInteger(value) };
+        const natural = maxTerms * termMax;
+        const value = configuredLimit === null ? natural : Math.min(natural, configuredLimit);
+        return { value, exact: tierLimit >= TIER.friend10 && Number.isSafeInteger(value) && (configuredLimit === null || configuredLimit >= natural) };
     }
 
     // --- Dyspozytor + deduplikacja ostatnich sekwencji ---
@@ -344,6 +349,11 @@
             ? minTerms
             : Math.max(minTerms, Math.floor(Number(cfg.o && cfg.o.max) || minTerms));
         const requiredAbsValue = Number(cfg.requiredAbsValue);
+        const maxResult = Number.isSafeInteger(Number(cfg.maxResult)) && Number(cfg.maxResult) >= 1
+            ? Number(cfg.maxResult) : null;
+        const resultOf = sequence => mode === 'mul' ? sequence[0] * sequence[1]
+            : mode === 'div' ? sequence[0] / sequence[1]
+                : sequence.reduce((sum, term) => sum + term, 0);
 
         let seq = makeSequence();
         // Ostatnie 10 hashy stanowi twarde okno anty-powtórkowe. Dotyczy także
@@ -353,13 +363,15 @@
             const validLength = seq.length >= minTerms && seq.length <= maxTerms;
             const hasRequiredValue = !Number.isFinite(requiredAbsValue)
                 || seq.some(term => Math.abs(term) === requiredAbsValue);
-            if (validLength && hasRequiredValue && history.indexOf(hash) === -1) break;
+            const withinResultLimit = maxResult === null || resultOf(seq) <= maxResult;
+            if (validLength && hasRequiredValue && withinResultLimit && history.indexOf(hash) === -1) break;
             seq = makeSequence();
         }
         const hash = mode + ':' + seq.join(',');
         const hasRequiredValue = !Number.isFinite(requiredAbsValue)
             || seq.some(term => Math.abs(term) === requiredAbsValue);
-        if (seq.length < minTerms || seq.length > maxTerms || !hasRequiredValue || history.indexOf(hash) !== -1) {
+        const withinResultLimit = maxResult === null || resultOf(seq) <= maxResult;
+        if (seq.length < minTerms || seq.length > maxTerms || !hasRequiredValue || !withinResultLimit || history.indexOf(hash) !== -1) {
             throw new Error('Konfiguracja nie pozwala wygenerować zadania różnego od 10 poprzednich.');
         }
         history.push(hash);

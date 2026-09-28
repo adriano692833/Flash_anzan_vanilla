@@ -46,6 +46,8 @@ for (const [kyu, expected] of Object.entries(EXPECTED_MAX)) {
 }
 if (G.maxPossibleResult({ m: 'mul', d: 1, mul: { a: { min: 2, max: 12 }, b: { min: 3, max: 8 } } }).value !== 96) violations++;
 if (G.maxPossibleResult({ m: 'div', div: { divisor: { min: 2, max: 9 }, quotient: { min: 4, max: 25 } } }).value !== 25) violations++;
+const limitedMaximum = G.maxPossibleResult({ m: 'mixed', d: 2, o: 5, tier: 'full', range: { min: 10, max: 99 }, maxResult: 100 });
+if (limitedMaximum.value !== 100 || limitedMaximum.exact) violations++;
 
 for (const kyu of Object.keys(KYU)) {
     const cfg = KYU[kyu];
@@ -127,6 +129,22 @@ for (const cfg of [
         if (previous.includes(hash)) violations++;
         previous.push(hash);
         if (previous.length > 10) previous.shift();
+    }
+}
+
+// Ustawiony limit wyniku jest twardym warunkiem generatora, również dla × i ÷.
+for (const cfg of [
+    { m: 'mixed', d: 2, o: 5, tier: 'full', range: { min: 10, max: 99 }, maxResult: 100 },
+    { m: 'mul', mul: { a: { min: 2, max: 20 }, b: { min: 2, max: 20 } }, maxResult: 50 },
+    { m: 'div', div: { divisor: { min: 2, max: 20 }, quotient: { min: 2, max: 20 } }, maxResult: 5 }
+]) {
+    const history = [];
+    for (let i = 0; i < 50; i++) {
+        const seq = G.generateSequence(cfg, { history });
+        const result = cfg.m === 'mul' ? seq[0] * seq[1]
+            : cfg.m === 'div' ? seq[0] / seq[1]
+                : seq.reduce((sum, term) => sum + term, 0);
+        if (result > cfg.maxResult) violations++;
     }
 }
 

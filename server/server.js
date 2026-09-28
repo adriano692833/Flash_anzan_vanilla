@@ -395,6 +395,9 @@ function validateConfig(config) {
     if (config.requiredAbsValue != null) {
         safe.requiredAbsValue = clampInt(config.requiredAbsValue, 1, 99999999, 1);
     }
+    if (Number.isSafeInteger(Number(config.maxResult)) && Number(config.maxResult) >= 1) {
+        safe.maxResult = Math.floor(Number(config.maxResult));
+    }
 
     const safeRange = (value, minFallback, maxFallback) => {
         if (!value || typeof value !== 'object') return null;
