@@ -14,6 +14,7 @@ const {
     claimLoginName,
     releaseLoginName,
     updateTrainingPresets,
+    awardSoloPoints,
     createClass,
     getClass,
     listClassesForTeacher,
@@ -61,6 +62,10 @@ const { initializeApp, getApp, getApps } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const firebaseApp = getApps().length ? getApp() : initializeApp();
 const firebaseAuth = getAuth(firebaseApp);
+// Klucz Web API nie jest sekretem, ale musi wskazywać WYŁĄCZNIE nasz projekt.
+// Nigdy nie ufamy wartości przesłanej przez klienta: obcy klucz mógłby skierować
+// REST-ową weryfikację hasła do innego projektu Firebase.
+const FIREBASE_WEB_API_KEY = String(process.env.FIREBASE_WEB_API_KEY || 'AIzaSyBKyPQvaiLkwU-nn6s_POd5obLyymadkU0');
 
 // Awaryjny kod bootstrap właściciela. Domyślnie wyłączony; produkcyjna ścieżka
 // używa jednorazowego zaproszenia tworzonego skryptem operatorskim.
@@ -90,7 +95,9 @@ app.use(express.json({ limit: '8kb' }));
 
 // --- Configuration ---
 const PORT = process.env.PORT || 8080;
-const MAX_ROOM_CAPACITY = Number.parseInt(process.env.ROOM_CAPACITY || '50', 10);
+const configuredRoomCapacity = Number.parseInt(process.env.ROOM_CAPACITY || '50', 10);
+const MAX_ROOM_CAPACITY = Number.isFinite(configuredRoomCapacity)
+    ? Math.max(2, Math.min(100, configuredRoomCapacity)) : 50;
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
     : ['https://anzan-web.ew.r.appspot.com', 'https://anzan-game.vercel.app'];
@@ -99,6 +106,13 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    // Socket.IO może być używany przez jawnie dozwolony frontend na innej domenie.
+    res.setHeader('Cross-Origin-Resource-Policy', req.path.startsWith('/socket.io') ? 'cross-origin' : 'same-origin');
+    if (req.secure || req.get('x-forwarded-proto') === 'https') {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
     next();
 });
 const httpLoginLimits = new Map();
@@ -119,8 +133,8 @@ function allowHttpLogin(key, max = 8, windowMs = 15 * 60 * 1000) {
     return current.count <= max;
 }
 
-async function requestFirebaseVerificationEmail(idToken, apiKey) {
-    const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(apiKey)}`, {
+async function requestFirebaseVerificationEmail(idToken) {
+    const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(FIREBASE_WEB_API_KEY)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requestType: 'VERIFY_EMAIL', idToken })
@@ -139,8 +153,7 @@ app.post('/api/auth/username', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const username = normalizeLoginName(req.body && req.body.username);
     const password = String(req.body && req.body.password || '');
-    const apiKey = String(req.body && req.body.apiKey || '');
-    if (username.length < 3 || username.includes('@') || password.length < 6 || apiKey.length < 20 || apiKey.length > 100) {
+    if (username.length < 3 || username.includes('@') || password.length < 6) {
         return res.status(400).json({ error: 'INVALID_REQUEST' });
     }
     const aliasKey = crypto.createHash('sha256').update(username).digest('hex');
@@ -156,7 +169,7 @@ app.post('/api/auth/username', async (req, res) => {
         }
         const user = await firebaseAuth.getUser(uid);
         if (!user.email || user.disabled) return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
-        const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`, {
+        const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(FIREBASE_WEB_API_KEY)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: user.email, password, returnSecureToken: true })
@@ -168,7 +181,7 @@ app.post('/api/auth/username', async (req, res) => {
         let verificationEmailRequested = false;
         if (!user.emailVerified && !user.email.endsWith('.anzan.local') && allowHttpLogin(`verify-uid:${uid}`, 3, 60 * 60 * 1000)) {
             try {
-                await requestFirebaseVerificationEmail(verified.idToken, apiKey);
+                await requestFirebaseVerificationEmail(verified.idToken);
                 verificationEmailRequested = true;
                 console.info('[verification-email] accepted for uid:', uid.slice(0, 8));
             } catch (error) {
@@ -186,8 +199,7 @@ app.post('/api/auth/username', async (req, res) => {
 app.post('/api/auth/send-verification', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const idToken = String(req.body && req.body.idToken || '');
-    const apiKey = String(req.body && req.body.apiKey || '');
-    if (idToken.length < 100 || idToken.length > 5000 || apiKey.length < 20 || apiKey.length > 100) {
+    if (idToken.length < 100 || idToken.length > 5000) {
         return res.status(400).json({ error: 'INVALID_REQUEST' });
     }
     try {
@@ -200,7 +212,7 @@ app.post('/api/auth/send-verification', async (req, res) => {
         if (!allowHttpLogin(`verify-uid:${user.uid}`, 3, 60 * 60 * 1000)) {
             return res.status(429).json({ error: 'TOO_MANY_ATTEMPTS' });
         }
-        await requestFirebaseVerificationEmail(idToken, apiKey);
+        await requestFirebaseVerificationEmail(idToken);
         console.info('[verification-email] accepted for uid:', user.uid.slice(0, 8));
         return res.json({ accepted: true });
     } catch (error) {
@@ -212,8 +224,7 @@ app.post('/api/auth/send-verification', async (req, res) => {
 app.post('/api/auth/password-reset', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const username = normalizeLoginName(req.body && req.body.username);
-    const apiKey = String(req.body && req.body.apiKey || '');
-    if (username.length < 3 || username.includes('@') || apiKey.length < 20 || apiKey.length > 100) {
+    if (username.length < 3 || username.includes('@')) {
         return res.status(400).json({ error: 'INVALID_REQUEST' });
     }
     const aliasKey = crypto.createHash('sha256').update(username).digest('hex');
@@ -226,7 +237,7 @@ app.post('/api/auth/password-reset', async (req, res) => {
         if (uid) {
             const user = await firebaseAuth.getUser(uid);
             if (user.email && !user.email.endsWith('.anzan.local') && !user.disabled) {
-                await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(apiKey)}`, {
+                await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(FIREBASE_WEB_API_KEY)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestType: 'PASSWORD_RESET', email: user.email })
@@ -271,6 +282,18 @@ app.get('/ready', async (req, res) => {
     }
 });
 
+// Kontrolowane błędy parsera nie powinny trafiać do logów jako awaria aplikacji.
+app.use((error, req, res, next) => {
+    if (error?.type === 'entity.too.large') {
+        return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE' });
+    }
+    if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+        return res.status(400).json({ error: 'INVALID_JSON' });
+    }
+    console.error('[http] unhandled request error:', error?.message || error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR' });
+});
+
 const server = http.createServer(app);
 
 // App Engine standard nie obsługuje WebSocketów. Polling utrzymuje koszty blisko
@@ -286,7 +309,8 @@ const io = new Server(server, {
         credentials: true
     },
     transports: ['polling'],
-    allowUpgrades: false
+    allowUpgrades: false,
+    maxHttpBufferSize: 64 * 1024
 });
 
 // --- Rate limiting (in-memory, per socket+event) ---
@@ -455,7 +479,7 @@ function generateRoomCodeRaw() {
     // 6 chars from 31-char alphabet = 887M combinations (vs 923k for 4-char)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
-    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < 6; i++) code += chars.charAt(crypto.randomInt(chars.length));
     return code;
 }
 
@@ -510,9 +534,8 @@ function invitationHash(code) {
 
 function generateInvitationCode() {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const bytes = crypto.randomBytes(12);
     let raw = '';
-    for (let i = 0; i < 12; i++) raw += alphabet[bytes[i] % alphabet.length];
+    for (let i = 0; i < 12; i++) raw += alphabet[crypto.randomInt(alphabet.length)];
     return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8)}`;
 }
 
@@ -570,6 +593,20 @@ function scheduleEventsConflict(a, b) {
         && timeRangesOverlap(once.startMinutes, once.durationMinutes, weekly.startMinutes, weekly.durationMinutes);
 }
 
+function isIsoDate(value) {
+    const text = String(value || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+    const date = new Date(`${text}T12:00:00Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === text;
+}
+
+function eventOccursOn(event, dateText) {
+    if (!event || !isIsoDate(dateText) || event.status === 'cancelled') return false;
+    if (event.kind === 'once') return event.date === dateText;
+    if (event.kind !== 'weekly' || dateText < event.validFrom || dateText > event.validUntil) return false;
+    return new Date(`${dateText}T12:00:00Z`).getUTCDay() === Number(event.weekday);
+}
+
 function makePlayer({ id, uid, name, avatar, role }) {
     return {
         id,          // socket.id — adresowanie połączenia w pokoju
@@ -594,24 +631,44 @@ function sortPlayersForLobby(room) {
     });
 }
 
+function playersForViewer(room, viewer) {
+    const full = sortPlayersForLobby(room);
+    const masked = room.hideLeaderboard && room.state === 'playing' && viewer.role !== 'host';
+    return {
+        masked,
+        players: full.map(row => ({
+            ...(viewer.role === 'host' ? { id: row.id, uid: row.uid } : (row.uid === viewer.uid ? { uid: row.uid } : {})),
+            name: row.name,
+            avatar: row.avatar,
+            role: row.role,
+            xp: masked ? null : row.xp,
+            totalTime: masked ? null : row.totalTime,
+            status: row.status
+        }))
+    };
+}
+
 function emitLobbyUpdate(code) {
     const room = rooms[code];
     if (!room) return;
-    const full = sortPlayersForLobby(room);
     for (const player of Object.values(room.players)) {
-        const masked = room.hideLeaderboard && room.state === 'playing' && player.role !== 'host';
-        const players = masked ? full.map(row => ({ ...row, xp: null, totalTime: null })) : full;
-        io.to(player.id).emit('lobby_update', { code, state: room.state, locked: !!room.locked, players, hideLeaderboard: masked });
+        const { masked, players } = playersForViewer(room, player);
+        io.to(player.id).emit('lobby_update', {
+            code,
+            state: room.state,
+            locked: !!room.locked,
+            players,
+            hideLeaderboard: !!room.hideLeaderboard,
+            leaderboardHidden: masked
+        });
     }
 }
 
 function emitLeaderboardUpdate(code) {
     const room = rooms[code];
     if (!room) return;
-    const full = sortPlayersForLobby(room);
     for (const player of Object.values(room.players)) {
-        const masked = room.hideLeaderboard && room.state === 'playing' && player.role !== 'host';
-        const players = masked ? full.map(row => ({ ...row, xp: null, totalTime: null })) : full;
+        const { masked, players } = playersForViewer(room, player);
         io.to(player.id).emit('leaderboard_update', { players, hidden: masked });
     }
 }
@@ -706,6 +763,27 @@ function removePlayerFromRoom(code, socketId, reason) {
         emitLobbyUpdate(code);
         console.log(`[LEAVE] ${socketId} left ${code} (${reason || 'LEFT'})`);
     }
+}
+
+function banUidFromRoom(room, uid, reason) {
+    if (!room || !uid) return;
+    if (!room.bannedUids) room.bannedUids = new Set();
+    room.bannedUids.add(uid);
+    for (const [playerId, player] of Object.entries(room.players || {})) {
+        if (player.uid !== uid || player.role === 'host') continue;
+        const client = io.sockets.sockets.get(playerId);
+        if (client) {
+            client.emit('player_kicked', { playerName: player.name, reason: reason || 'REMOVED' });
+            client.leave(room.code);
+            client.data.roomCode = null;
+            client.data.roomRole = null;
+        }
+        delete room.players[playerId];
+    }
+    for (const [pendingId, pending] of Object.entries(room.pending || {})) {
+        if (pending.uid === uid) delete room.pending[pendingId];
+    }
+    emitLobbyUpdate(room.code);
 }
 
 // Cleanup stale pending requests older than 5 minutes
@@ -821,8 +899,10 @@ function advanceRoomTask(code) {
         room.state = 'completed';
         room.acceptingAnswers = false;
         if (room.autoAdvanceTimer) clearTimeout(room.autoAdvanceTimer);
-        const players = sortPlayersForLobby(room);
-        io.to(code).emit('session_completed', { players, taskCount: room.taskIndex + 1 });
+        for (const player of Object.values(room.players)) {
+            const { players } = playersForViewer(room, player);
+            io.to(player.id).emit('session_completed', { players, taskCount: room.taskIndex + 1 });
+        }
         emitLobbyUpdate(code);
         persistSession(room, 'TASK_LIMIT');
         return;
@@ -845,6 +925,15 @@ function advanceRoomTask(code) {
 
 io.on('connection', (socket) => {
     console.log(`[CONN] ${socket.id} connected`);
+
+    // Socket.IO nie opakowuje wyjątków z destrukturyzacji danych zdarzenia.
+    // Uzupełniamy brakujący lub nieobiektowy payload, aby spreparowany komunikat
+    // nie mógł zakończyć całego procesu Node.js.
+    socket.use((packet, next) => {
+        if (packet.length < 2) packet.push({});
+        else if (!packet[1] || typeof packet[1] !== 'object' || Array.isArray(packet[1])) packet[1] = {};
+        next();
+    });
 
     // 1. Registration — wymaga zweryfikowanego tokenu Firebase.
     socket.on('register', async ({ idToken, name, avatar, requestedRole, teacherCode, inviteCode, contactEmail, contactPhone }) => {
@@ -933,6 +1022,17 @@ io.on('connection', (socket) => {
                     if (['school_admin', 'teacher', 'guardian'].includes(role) && !email) {
                         socket.emit('auth_error', { message: 'Dla konta pracownika lub opiekuna wymagany jest poprawny e-mail kontaktowy.', rollback: true });
                         return;
+                    }
+                    if (role === 'student' || role === 'guardian') {
+                        const invitedClass = await getClass(invitation.classId || '');
+                        if (!invitedClass || invitedClass.active === false || invitedClass.schoolId !== schoolId) {
+                            socket.emit('auth_error', { message: 'Klasa z tego zaproszenia już nie istnieje albo jest zamknięta.', rollback: true });
+                            return;
+                        }
+                        if (role === 'guardian' && (!invitation.studentUid || !await isClassMember(invitedClass.id, invitation.studentUid))) {
+                            socket.emit('auth_error', { message: 'Uczeń przypisany do zaproszenia nie należy już do tej klasy.', rollback: true });
+                            return;
+                        }
                     }
                     if (schoolId) {
                         const school = await getSchool(schoolId);
@@ -1050,7 +1150,7 @@ io.on('connection', (socket) => {
         const schoolName = sanitizeLabel(name, 80);
         if (!schoolName) return socket.emit('error_msg', 'Podaj nazwę szkoły.');
         try {
-            const schoolId = 'SCH' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+            const schoolId = 'SCH' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
             await createSchool(schoolId, {
                 name: schoolName,
                 ownerUid: socket.uid,
@@ -1188,7 +1288,9 @@ io.on('connection', (socket) => {
             await revokeInvitation(invite.id, socket.data.schoolId);
             await auditLog(socket.data.schoolId, socket.uid, 'invitation.revoked', { role: invite.role });
             socket.emit('info_msg', 'Zaproszenie unieważnione.');
-            socket.emit('invitations_list', { invitations: (await listInvitations(socket.data.schoolId)).map(publicInvitation) });
+            let invitations = await listInvitations(socket.data.schoolId);
+            if (socket.data.accountRole === 'teacher') invitations = invitations.filter(item => item.createdBy === socket.uid);
+            socket.emit('invitations_list', { invitations: invitations.map(publicInvitation) });
         } catch (error) { socket.emit('error_msg', 'Nie udało się unieważnić zaproszenia.'); }
     });
 
@@ -1222,10 +1324,11 @@ io.on('connection', (socket) => {
                 events = events.filter(item => item.classId === classId);
                 assignments = assignments.filter(item => item.classId === classId);
             }
-            const staff = allUsers.filter(user => ['teacher', 'school_admin'].includes(user.role)).map(user => ({
-                uid: user.uid, name: user.name, role: user.role,
-                canTeach: user.role === 'teacher' || user.role === 'school_admin' || !!user.canTeach
-            }));
+            const staff = ['teacher', 'school_admin'].includes(socket.data.accountRole)
+                ? allUsers.filter(user => ['teacher', 'school_admin'].includes(user.role)).map(user => ({
+                    uid: user.uid, name: user.name, role: user.role,
+                    canTeach: user.role === 'teacher' || user.role === 'school_admin' || !!user.canTeach
+                })) : [];
             const visibleClasses = socket.data.accountRole === 'teacher'
                 ? (dashboard.classes || []).filter(item => item.teacherUid === socket.uid)
                 : (dashboard.classes || []);
@@ -1238,7 +1341,7 @@ io.on('connection', (socket) => {
                 staff,
                 events,
                 assignments,
-                seatUsage: { used: allUsers.length, limit: Number(school?.seatLimit) || 0 },
+                seatUsage: isOwner ? { used: allUsers.length, limit: Number(school?.seatLimit) || 0 } : null,
                 requests: {
                     privacy: privacyRequests.map(item => ({ ...item, createdAt: timestampIso(item.createdAt), updatedAt: timestampIso(item.updatedAt) })),
                     makeup: makeupRequests.map(item => ({ ...item, createdAt: timestampIso(item.createdAt), updatedAt: timestampIso(item.updatedAt) }))
@@ -1284,10 +1387,10 @@ io.on('connection', (socket) => {
             return socket.emit('error_msg', 'Podaj nazwę klasy i wybierz nauczyciela z tej szkoły.');
         }
         try {
-            const classId = 'C' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1000);
+            const classId = 'C' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
             await createClass(classId, {
                 name: className, teacherUid: teacher.uid, teacherName: teacher.name,
-                schoolYear: String(schoolYear || '').slice(0, 16), schoolId: socket.data.schoolId
+                schoolYear: sanitizeLabel(schoolYear, 16), schoolId: socket.data.schoolId
             });
             await auditLog(socket.data.schoolId, socket.uid, 'class.created', { classId, teacherUid: teacher.uid });
             socket.emit('info_msg', 'Klasa utworzona i przypisana nauczycielowi.');
@@ -1322,16 +1425,16 @@ io.on('connection', (socket) => {
             validUntil: kind === 'weekly' ? String(payload.validUntil || '').slice(0, 10) : '',
             timezone: 'Europe/Warsaw', status: 'active', createdBy: socket.uid
         };
-        if (!event.title || (kind === 'once' && !/^\d{4}-\d{2}-\d{2}$/.test(event.date))
+        if (!event.title || (kind === 'once' && !isIsoDate(event.date))
             || startMinutes + durationMinutes > 1440
-            || (kind === 'weekly' && (!/^\d{4}-\d{2}-\d{2}$/.test(event.validFrom)
-                || !/^\d{4}-\d{2}-\d{2}$/.test(event.validUntil) || event.validFrom > event.validUntil))) {
+            || (kind === 'weekly' && (!isIsoDate(event.validFrom)
+                || !isIsoDate(event.validUntil) || event.validFrom > event.validUntil))) {
             return socket.emit('error_msg', 'Uzupełnij poprawnie termin zajęć.');
         }
         try {
             const conflicts = (await listScheduleEvents(socket.data.schoolId)).filter(item => scheduleEventsConflict(item, event));
             if (conflicts.length) return socket.emit('schedule_conflict', { conflicts });
-            const eventId = 'EV' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+            const eventId = 'EV' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
             await createScheduleEvent(eventId, event);
             await auditLog(socket.data.schoolId, socket.uid, 'schedule.created', { eventId, classId: cls.id });
             socket.emit('info_msg', 'Zajęcia dodane do planu.');
@@ -1361,12 +1464,18 @@ io.on('connection', (socket) => {
         const title = sanitizeLabel(payload.title, 100);
         if (!title) return socket.emit('error_msg', 'Podaj tytuł zadania.');
         try {
-            const assignmentId = 'AS' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+            const assignmentId = 'AS' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
+            const dueDate = String(payload.dueDate || '').slice(0, 10);
+            if (dueDate && !isIsoDate(dueDate)) return socket.emit('error_msg', 'Termin zadania ma nieprawidłową datę.');
+            const assignedTeacher = await getUser(cls.teacherUid);
             await createAssignment(assignmentId, {
                 schoolId: socket.data.schoolId, classId: cls.id, className: cls.name,
-                teacherUid: socket.uid, teacherName: socket.data.name, title,
+                teacherUid: cls.teacherUid,
+                teacherName: assignedTeacher?.name || cls.teacherName || socket.data.name,
+                createdBy: socket.uid,
+                title,
                 description: sanitizeLabel(payload.description, 500),
-                dueDate: String(payload.dueDate || '').slice(0, 10),
+                dueDate,
                 trainingKey: sanitizeLabel(payload.trainingKey, 80)
             });
             await auditLog(socket.data.schoolId, socket.uid, 'assignment.created', { assignmentId, classId: cls.id });
@@ -1379,34 +1488,52 @@ io.on('connection', (socket) => {
         if (!checkRateLimit(socket.id, 'save_attendance', 10, 60000)) return;
         if (!requireAuth() || !['school_admin', 'teacher'].includes(socket.data.accountRole)) return;
         if (!requireVerifiedStaff()) return;
-        const event = (await listScheduleEvents(socket.data.schoolId)).find(item => item.id === eventId);
-        if (!event || (socket.data.accountRole === 'teacher' && event.teacherUid !== socket.uid)) return socket.emit('error_msg', 'Brak dostępu do listy obecności.');
-        const safeEntries = Array.isArray(entries) ? entries.slice(0, 100).map(entry => ({
-            uid: String(entry.uid || ''), name: sanitizeName(entry.name),
-            status: ['present', 'absent', 'late', 'excused'].includes(entry.status) ? entry.status : 'present'
-        })).filter(entry => entry.uid) : [];
         try {
-            await setAttendance(eventId, String(occurrenceDate || '').slice(0, 10), safeEntries, socket.uid);
+            const dateText = String(occurrenceDate || '').slice(0, 10);
+            const event = (await listScheduleEvents(socket.data.schoolId)).find(item => item.id === eventId);
+            if (!event || (socket.data.accountRole === 'teacher' && event.teacherUid !== socket.uid)) {
+                return socket.emit('error_msg', 'Brak dostępu do listy obecności.');
+            }
+            if (!eventOccursOn(event, dateText)) return socket.emit('error_msg', 'Ta data nie jest terminem wybranych zajęć.');
+            const members = await getClassLeaderboard(event.classId, 100);
+            const roster = new Map(members.map(member => [String(member.uid), member]));
+            const seen = new Set();
+            const safeEntries = Array.isArray(entries) ? entries.slice(0, 100).map(entry => {
+                const uid = String(entry && entry.uid || '');
+                const member = roster.get(uid);
+                if (!member || seen.has(uid)) return null;
+                seen.add(uid);
+                return {
+                    uid,
+                    name: sanitizeName(member.name),
+                    status: ['present', 'absent', 'late', 'excused'].includes(entry.status) ? entry.status : 'present'
+                };
+            }).filter(Boolean) : [];
+            await setAttendance(eventId, dateText, safeEntries, socket.uid);
             await auditLog(socket.data.schoolId, socket.uid, 'attendance.saved', { eventId, count: safeEntries.length });
             socket.emit('info_msg', 'Obecność zapisana.');
         } catch (error) { socket.emit('error_msg', 'Nie udało się zapisać obecności.'); }
     });
 
     socket.on('request_attendance', async ({ eventId, occurrenceDate }) => {
+        if (!checkRateLimit(socket.id, 'request_attendance', 10, 10000)) return;
         if (!requireAuth() || !['school_admin', 'teacher'].includes(socket.data.accountRole)) return;
-        const event = (await listScheduleEvents(socket.data.schoolId)).find(item => item.id === eventId);
-        if (!event || (socket.data.accountRole === 'teacher' && event.teacherUid !== socket.uid)) return;
-        const [members, attendance] = await Promise.all([
-            getClassLeaderboard(event.classId, 100), listAttendance(eventId, String(occurrenceDate || '').slice(0, 10))
-        ]);
-        socket.emit('attendance_data', { eventId, occurrenceDate, members, attendance });
+        try {
+            const dateText = String(occurrenceDate || '').slice(0, 10);
+            const event = (await listScheduleEvents(socket.data.schoolId)).find(item => item.id === eventId);
+            if (!event || (socket.data.accountRole === 'teacher' && event.teacherUid !== socket.uid) || !eventOccursOn(event, dateText)) return;
+            const [members, attendance] = await Promise.all([
+                getClassLeaderboard(event.classId, 100), listAttendance(eventId, dateText)
+            ]);
+            socket.emit('attendance_data', { eventId, occurrenceDate: dateText, members, attendance });
+        } catch (error) { socket.emit('error_msg', 'Nie udało się wczytać obecności.'); }
     });
 
     socket.on('create_privacy_request', async ({ type }) => {
         if (!checkRateLimit(socket.id, 'create_privacy_request', 3, 86400000) || !requireAuth()) return;
         const requestType = ['export', 'delete', 'correct'].includes(type) ? type : 'export';
         try {
-            const requestId = 'PR' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+            const requestId = 'PR' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
             await createPrivacyRequest(requestId, { uid: socket.uid, schoolId: socket.data.schoolId || '', type: requestType });
             if (socket.data.schoolId) await auditLog(socket.data.schoolId, socket.uid, 'privacy.requested', { type: requestType });
             socket.emit('info_msg', 'Wniosek został zapisany. Administrator szkoły go zweryfikuje.');
@@ -1417,16 +1544,27 @@ io.on('connection', (socket) => {
         if (!checkRateLimit(socket.id, 'create_makeup_request', 5, 86400000) || !requireAuth()) return;
         if (!['student', 'guardian'].includes(socket.data.accountRole)) return socket.emit('error_msg', 'Ta funkcja jest przeznaczona dla ucznia lub opiekuna.');
         try {
-            const requestId = 'MR' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+            const profile = await getUser(socket.uid);
+            let classId = profile?.classId || '';
+            if (socket.data.accountRole === 'guardian' && profile?.linkedStudentUid) {
+                classId = (await getUser(profile.linkedStudentUid))?.classId || '';
+            }
+            const event = (await listScheduleEvents(socket.data.schoolId)).find(item => item.id === String(eventId || ''));
+            const dateText = String(preferredDate || '').slice(0, 10);
+            if (!event || event.classId !== classId || event.status === 'cancelled' || !isIsoDate(dateText)) {
+                return socket.emit('error_msg', 'Wybierz dostępne zajęcia i poprawny proponowany termin.');
+            }
+            const requestId = 'MR' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
             await createMakeupRequest(requestId, {
-                uid: socket.uid, schoolId: socket.data.schoolId, eventId: String(eventId || ''),
-                preferredDate: String(preferredDate || '').slice(0, 10), note: sanitizeLabel(note, 300)
+                uid: socket.uid, schoolId: socket.data.schoolId, eventId: event.id,
+                preferredDate: dateText, note: sanitizeLabel(note, 300)
             });
             socket.emit('info_msg', 'Prośba o odrobienie zajęć została wysłana.');
         } catch (error) { socket.emit('error_msg', 'Nie udało się wysłać prośby.'); }
     });
 
     socket.on('request_audit_logs', async () => {
+        if (!checkRateLimit(socket.id, 'request_audit_logs', 5, 10000)) return;
         if (!requireAuth() || socket.data.accountRole !== 'school_admin' || socket.data.schoolRole !== 'owner') return;
         try {
             const logs = await listAuditLogs(socket.data.schoolId, 100);
@@ -1444,12 +1582,12 @@ io.on('connection', (socket) => {
         const className = sanitizeLabel(name, 60);
         if (!className) return socket.emit('error_msg', 'Podaj nazwę klasy.');
         try {
-            const classId = 'C' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1000);
+            const classId = 'C' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
             await createClass(classId, {
                 name: className,
                 teacherUid: socket.uid,
                 teacherName: socket.data.name,
-                schoolYear: String(schoolYear || '').slice(0, 16),
+                schoolYear: sanitizeLabel(schoolYear, 16),
                 schoolId: socket.data.schoolId || ''
             });
             socket.emit('class_created', { classId, name: className, schoolYear });
@@ -1498,7 +1636,9 @@ io.on('connection', (socket) => {
             const cls = await getClass(String(classId || ''));
             const assigned = cls && cls.teacherUid === socket.uid
                 && cls.schoolId && cls.schoolId === socket.data.schoolId;
-            return assigned ? cls : null;
+            const schoolOwner = cls && socket.data.accountRole === 'school_admin'
+                && socket.data.schoolRole === 'owner' && cls.schoolId === socket.data.schoolId;
+            return (assigned || schoolOwner) ? cls : null;
         } catch (e) { return null; }
     }
 
@@ -1536,7 +1676,11 @@ io.on('connection', (socket) => {
         if (!requireVerifiedStaff()) return;
         if (!await ownsClass(classId)) return socket.emit('error_msg', 'Brak dostępu do tej klasy.');
         try {
-            await removeClassMember(String(classId), String(uid || ''));
+            const targetUid = String(uid || '');
+            await removeClassMember(String(classId), targetUid);
+            for (const room of Object.values(rooms)) {
+                if (room.classId === String(classId)) banUidFromRoom(room, targetUid, 'REMOVED_FROM_CLASS');
+            }
             const members = await getClassLeaderboard(String(classId), 100);
             socket.emit('class_members', { classId, members });
         } catch (e) {
@@ -1579,6 +1723,9 @@ io.on('connection', (socket) => {
             await setClassActive(String(classId), false);
             const classes = await listClassesForTeacher(socket.uid, socket.data.schoolId);
             socket.emit('classes_list', { classes });
+            if (socket.data.accountRole === 'school_admin') {
+                socket.emit('school_dashboard', await getSchoolDashboard(socket.data.schoolId));
+            }
             socket.emit('info_msg', 'Klasa zamknięta (rok zakończony).');
         } catch (e) {
             socket.emit('error_msg', 'Nie udało się zamknąć klasy.');
@@ -1654,6 +1801,7 @@ io.on('connection', (socket) => {
             config: safeConfig,
             players: Object.create(null),
             pending: Object.create(null),
+            bannedUids: new Set(),
             state: 'lobby',
             taskIndex: 0,
             started: false,
@@ -1706,7 +1854,15 @@ io.on('connection', (socket) => {
         const code = sanitizeRoomCode(data?.code);
         const room = rooms[code];
         if (!room) return socket.emit('resume_failed', { reason: 'Pokój już nie istnieje.' });
+        if (room.bannedUids?.has(socket.uid)) return socket.emit('resume_failed', { reason: 'Nauczyciel zakończył Twój udział w tych zajęciach.' });
         if (room.hostUid === socket.uid) {
+            let cls = null;
+            try { cls = await getClass(room.classId); } catch (error) {
+                return socket.emit('resume_failed', { reason: 'Nie udało się potwierdzić uprawnień do zajęć.' });
+            }
+            if (!socket.data.canTeach || !cls || cls.schoolId !== socket.data.schoolId || cls.teacherUid !== socket.uid || cls.active === false) {
+                return socket.emit('resume_failed', { reason: 'Nie masz już uprawnienia do prowadzenia tych zajęć.' });
+            }
             if (room.hostReconnectTimer) clearTimeout(room.hostReconnectTimer);
             room.hostReconnectTimer = null;
             const host = makePlayer({ id: socket.id, uid: socket.uid, name: room.hostName, avatar: socket.data.avatar, role: 'host' });
@@ -1719,6 +1875,22 @@ io.on('connection', (socket) => {
         } else {
             const stat = room.sessionStats && room.sessionStats[socket.uid];
             if (!stat) return socket.emit('resume_failed', { reason: 'Nie znaleziono Twojej sesji.' });
+            let stillMember = false;
+            try { stillMember = !room.classId || await isClassMember(room.classId, socket.uid); } catch (error) { /* fail closed */ }
+            if (socket.data.accountRole !== 'student' || !stillMember) {
+                return socket.emit('resume_failed', { reason: 'Nie należysz już do klasy prowadzącej te zajęcia.' });
+            }
+            for (const [oldId, oldPlayer] of Object.entries(room.players)) {
+                if (oldId === socket.id || oldPlayer.uid !== socket.uid) continue;
+                const oldSocket = io.sockets.sockets.get(oldId);
+                if (oldSocket) {
+                    oldSocket.emit('session_replaced');
+                    oldSocket.leave(code);
+                    oldSocket.data.roomCode = null;
+                    oldSocket.data.roomRole = null;
+                }
+                delete room.players[oldId];
+            }
             const answered = room.answeredByTask[room.taskIndex] || new Set();
             const player = makePlayer({ id: socket.id, uid: socket.uid, name: stat.name, avatar: socket.data.avatar, role: 'player' });
             player.xp = stat.xp || 0;
@@ -1747,6 +1919,7 @@ io.on('connection', (socket) => {
         const room = rooms[code];
 
         if (!room) return socket.emit('error_msg', 'Pokój nie istnieje.');
+        if (room.bannedUids?.has(socket.uid)) return socket.emit('join_rejected', { reason: 'Nauczyciel zakończył Twój udział w tych zajęciach.' });
         if (room.locked) return socket.emit('join_rejected', { reason: 'Pokój jest zablokowany.' });
         if (room.state === 'playing') {
             const stat = room.sessionStats && room.sessionStats[socket.uid];
@@ -1820,7 +1993,7 @@ io.on('connection', (socket) => {
     });
 
     // Host accepts player
-    socket.on('accept_player', ({ roomCode, pendingId }) => {
+    socket.on('accept_player', async ({ roomCode, pendingId }) => {
         if (!checkRateLimit(socket.id, 'accept_player', 20, 10000)) return;
         const code = sanitizeRoomCode(roomCode);
         const room = rooms[code];
@@ -1828,6 +2001,14 @@ io.on('connection', (socket) => {
 
         const pending = room.pending?.[pendingId];
         if (!pending) return;
+
+        let validMember = !room.classId;
+        try { validMember = validMember || await isClassMember(room.classId, pending.uid); } catch (error) { /* fail closed */ }
+        if (room.bannedUids?.has(pending.uid) || !validMember) {
+            io.to(pending.socketId).emit('join_rejected', { reason: 'Uczeń nie należy już do tej klasy.' });
+            delete room.pending[pendingId];
+            return;
+        }
 
         const pendingSocket = io.sockets.sockets.get(pending.socketId);
         if (pendingSocket) {
@@ -1915,16 +2096,8 @@ io.on('connection', (socket) => {
 
         if (room.players[playerId]) {
             const pName = room.players[playerId].name;
-            const victimSocket = io.sockets.sockets.get(playerId);
-            delete room.players[playerId];
-
-            if (victimSocket) {
-                victimSocket.leave(c);
-                victimSocket.data.roomCode = null;
-                victimSocket.emit('player_kicked', { playerName: pName });
-            }
-
-            emitLobbyUpdate(c);
+            const targetUid = room.players[playerId].uid;
+            banUidFromRoom(room, targetUid, 'KICKED_BY_TEACHER');
             console.log(`[KICK] ${playerId} kicked from ${c}`);
         }
     });
@@ -2023,6 +2196,17 @@ io.on('connection', (socket) => {
         if (!room || socket.id !== room.host) return;
         room.nextTaskPoints = clampInt(data?.points, 0, 100, room.nextTaskPoints);
         socket.emit('task_points_updated', { points: room.nextTaskPoints });
+    });
+
+    socket.on('set_ranking_visibility', (data) => {
+        if (!checkRateLimit(socket.id, 'set_ranking_visibility', 10, 10000)) return;
+        const code = sanitizeRoomCode(data?.code);
+        const room = rooms[code];
+        if (!room || socket.id !== room.host) return;
+        room.hideLeaderboard = !!data?.hideLeaderboard;
+        emitLobbyUpdate(code);
+        emitLeaderboardUpdate(code);
+        socket.emit('ranking_visibility_updated', { hideLeaderboard: room.hideLeaderboard });
     });
 
     socket.on('force_end_round', (data) => {
@@ -2154,6 +2338,20 @@ io.on('connection', (socket) => {
         } catch (e) {
             console.error('[save_training_presets] error:', e.message);
             socket.emit('error_msg', 'Nie udało się zapisać konfiguracji treningu.');
+        }
+    });
+
+    socket.on('save_solo_progress', async (data) => {
+        if (!checkRateLimit(socket.id, 'save_solo_progress', 30, 60000)) return;
+        if (!requireAuth()) return;
+        const delta = clampInt(data?.xp, 1, 1000, 0);
+        const mode = ['flash', 'spoken', 'survival', 'worksheet'].includes(data?.mode) ? data.mode : 'flash';
+        if (!delta) return;
+        try {
+            await awardSoloPoints(socket.uid, delta);
+            socket.emit('solo_progress_saved', { xp: delta, mode });
+        } catch (error) {
+            socket.emit('solo_progress_failed', { xp: delta, mode });
         }
     });
 

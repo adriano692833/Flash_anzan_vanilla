@@ -15,9 +15,8 @@ function normalizeEmail(value) {
 
 function generateCode() {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const bytes = crypto.randomBytes(12);
     let raw = '';
-    for (let i = 0; i < 12; i++) raw += alphabet[bytes[i] % alphabet.length];
+    for (let i = 0; i < 12; i++) raw += alphabet[crypto.randomInt(alphabet.length)];
     return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8)}`;
 }
 

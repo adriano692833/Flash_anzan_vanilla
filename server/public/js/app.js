@@ -264,15 +264,6 @@ const app = {
         reader.readAsText(file);
     },
 
-    multiHostSetup: function () {
-        document.getElementById('multi-host-ui').style.display = 'block';
-        document.getElementById('multi-join-ui').style.display = 'none';
-    },
-    multiJoinSetup: function () {
-        document.getElementById('multi-host-ui').style.display = 'none';
-        document.getElementById('multi-join-ui').style.display = 'block';
-    },
-
     // --- GENERATOR ---
     // Delegujemy do wspólnego modułu SorobanGen (js/soroban-generator.js) —
     // jedno źródło prawdy współdzielone z serwerem. Moduł generuje ciągi
@@ -788,6 +779,9 @@ const app = {
                 if (ok) audio.success(); else audio.error();
 
                 if (!isNaN(xp) && xp > 0) this.user.xp += xp;
+                if (!isAsync && xp > 0 && this.multi?.recordSoloProgress) {
+                    this.multi.recordSoloProgress(xp, this.state.mode);
+                }
 
                 this.save();
                 if (typeof this.updateUI === 'function') this.updateUI();
@@ -979,6 +973,7 @@ const app = {
         });
         audio.success();
         const xp = corr * 10; this.user.xp += xp; this.save();
+        if (xp > 0 && this.multi?.recordSoloProgress) this.multi.recordSoloProgress(xp, 'worksheet');
 
         document.querySelectorAll('.screen').forEach(s => { s.style.display = 'none'; s.classList.remove('active'); });
         const rs = document.getElementById('result-screen');

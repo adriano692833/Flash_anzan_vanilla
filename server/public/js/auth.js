@@ -106,8 +106,7 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             username,
-                            password,
-                            apiKey: window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey
+                            password
                         })
                     });
                     const result = await response.json().catch(() => ({}));
@@ -153,8 +152,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        idToken,
-                        apiKey: window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey
+                        idToken
                     })
                 });
                 const result = await response.json().catch(() => ({}));
@@ -280,7 +278,7 @@
                 const response = await fetch('/api/auth/password-reset', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: identifier, apiKey: window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey })
+                    body: JSON.stringify({ username: identifier })
                 });
                 if (response.status === 429) return app.ui.toast('Za dużo prób. Odczekaj kilkanaście minut.', 'warning');
             }

@@ -97,6 +97,16 @@ async function updateTrainingPresets(uid, presets) {
     await db.collection('users').doc(uid).set({ trainingPresets: presets }, { merge: true });
 }
 
+// Wyniki solo są statystyką treningową (nie trafiają do rankingów szkoły).
+// Klient wysyła zbuforowany przyrost, dzięki czemu nie płacimy za zapis po każdym przykładzie.
+async function awardSoloPoints(uid, delta) {
+    await db.collection('users').doc(uid).set({
+        soloXp: Firestore.FieldValue.increment(delta),
+        history: { [todayKey()]: Firestore.FieldValue.increment(delta) },
+        lastActive: Firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+}
+
 function todayKey() {
     return new Date().toISOString().split('T')[0];
 }
@@ -526,6 +536,7 @@ module.exports = {
     claimLoginName,
     releaseLoginName,
     updateTrainingPresets,
+    awardSoloPoints,
     createClass,
     getClass,
     listClassesByTeacher,

@@ -24,17 +24,18 @@ assert(!before.has('student-c'), 'Uczeń bez odpowiedzi został błędnie zablok
 for (const marker of [
     "socket.on('repeat_task'", "reason: 'ALREADY_ANSWERED'", 'emitTaskUpdate(code, true)',
     "socket.on('set_task_points'", 'room.currentTask.points', "socket.on('toggle_ready'",
+    "socket.on('set_ranking_visibility'", 'playersForViewer(room, viewer)',
     "socket.on('resume_room'", 'room.answerOpensAt', 'const serverTime =',
     'for (let round = 0; round < 11; round++)', "emit('session_completed'"
 ]) assert(server.includes(marker), `Serwer multiplayer: brak ${marker}`);
 
 assert(!server.includes('stat.totalTime += data.time'), 'Serwer nadal ufa czasowi przesłanemu przez klienta');
 
-for (const marker of ['answerLocked', 'taskPoints', 'repeatTask', 'setTaskPoints', 'toggleReady', '_resumeRoomCode']) {
+for (const marker of ['answerLocked', 'taskPoints', 'repeatTask', 'setTaskPoints', 'setRankingVisibility', 'toggleReady', '_resumeRoomCode']) {
     assert(client.includes(marker) || app.includes(marker), `Klient multiplayer: brak ${marker}`);
 }
 
-for (const id of ['host-task-points', 'host-answer-time', 'host-task-limit', 'host-ranking-visibility', 'lobby-ready-btn', 'live-task-points']) {
+for (const id of ['host-task-points', 'host-answer-time', 'host-task-limit', 'host-ranking-visibility', 'live-ranking-visibility', 'lobby-ready-btn', 'live-task-points']) {
     assert(html.includes(`id="${id}"`), `UI multiplayer: brak ${id}`);
 }
 

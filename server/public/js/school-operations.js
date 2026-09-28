@@ -96,7 +96,7 @@
             setVisible('ops-event-teacher-field', role === 'school_admin');
 
             const summary = document.getElementById('ops-summary');
-            if (summary) summary.innerHTML = `<div><b>${(data.events || []).filter(e => e.status !== 'cancelled').length}</b><span>Serie zajęć</span></div><div><b>${(data.assignments || []).length}</b><span>Aktywne zadania</span></div><div><b>${Number(data.seatUsage && data.seatUsage.used) || 0}/${Number(data.seatUsage && data.seatUsage.limit) || '∞'}</b><span>Wykorzystanie licencji</span></div><div><b>Europe/Warsaw</b><span>Strefa czasowa</span></div>`;
+            if (summary) summary.innerHTML = `<div><b>${(data.events || []).filter(e => e.status !== 'cancelled').length}</b><span>Serie zajęć</span></div><div><b>${(data.assignments || []).length}</b><span>Aktywne zadania</span></div>${data.seatUsage ? `<div><b>${Number(data.seatUsage.used) || 0}/${Number(data.seatUsage.limit) || '∞'}</b><span>Wykorzystanie licencji</span></div>` : ''}<div><b>Europe/Warsaw</b><span>Strefa czasowa</span></div>`;
 
             const classes = data.classes || [];
             ['ops-invite-class', 'ops-event-class', 'ops-assignment-class'].forEach(id => {
@@ -187,10 +187,10 @@
         renderEvents: function () {
             const box = document.getElementById('ops-events-list'); if (!box) return;
             const staff = ['school_admin', 'teacher'].includes(this.data.role);
-            const list = [...(this.data.events || [])].sort((a, b) => String(nextOccurrence(a)).localeCompare(String(nextOccurrence(b))));
+            const list = [...(this.data.events || [])].sort((a, b) => String(nextOccurrence(a) || '9999').localeCompare(String(nextOccurrence(b) || '9999')));
             box.innerHTML = list.length ? list.map(item => {
                 const occurrence = nextOccurrence(item);
-                return `<article class="ops-event ${item.status === 'cancelled' ? 'is-cancelled' : ''}"><div class="ops-event-date"><b>${he(minutesToTime(item.startMinutes))}</b><span>${he(occurrence || item.date || '—')}</span></div><div><h3>${he(item.title)}</h3><p>${he(item.className)} · ${he(item.teacherName)}${item.location ? ' · ' + he(item.location) : ''}</p><small>${he(eventDateLabel(item))}</small></div><div class="ops-event-actions">${staff && item.status !== 'cancelled' ? `<button class="btn btn-secondary" onclick="app.schoolOps.openAttendance('${he(item.id)}','${he(occurrence || localDate(0))}')">Obecność</button><button class="btn btn-danger" onclick="app.schoolOps.cancelEvent('${he(item.id)}')">Odwołaj</button>` : ''}</div></article>`;
+                return `<article class="ops-event ${item.status === 'cancelled' ? 'is-cancelled' : ''}"><div class="ops-event-date"><b>${he(minutesToTime(item.startMinutes))}</b><span>${he(occurrence || item.date || '—')}</span></div><div><h3>${he(item.title)}</h3><p>${he(item.className)} · ${he(item.teacherName)}${item.location ? ' · ' + he(item.location) : ''}</p><small>${he(eventDateLabel(item))}</small></div><div class="ops-event-actions">${staff && item.status !== 'cancelled' ? `${occurrence ? `<button class="btn btn-secondary" onclick="app.schoolOps.openAttendance('${he(item.id)}','${he(occurrence)}')">Obecność</button>` : ''}<button class="btn btn-danger" onclick="app.schoolOps.cancelEvent('${he(item.id)}')">Odwołaj</button>` : ''}</div></article>`;
             }).join('') : '<div class="ops-empty">Brak zaplanowanych zajęć.</div>';
             const make = document.getElementById('ops-makeup-event');
             if (make) make.innerHTML = list.filter(e => e.status !== 'cancelled').map(e => `<option value="${he(e.id)}">${he(e.title)} · ${he(e.className)}</option>`).join('');

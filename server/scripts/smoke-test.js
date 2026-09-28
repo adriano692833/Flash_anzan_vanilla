@@ -59,9 +59,10 @@ function postJson(pathname, payload) {
 
 async function verify() {
     try {
-        const [home, health, manifest, aliasMalformed] = await Promise.all([
+        const [home, health, manifest, aliasMalformed, oversized] = await Promise.all([
             get('/'), get('/health'), get('/manifest.webmanifest'),
-            postJson('/api/auth/username', { username: 'x', password: 'x', apiKey: 'x' })
+            postJson('/api/auth/username', { username: 'x', password: 'x' }),
+            postJson('/api/auth/username', { username: 'testuser', password: 'x'.repeat(9000) })
         ]);
         clearTimeout(timeout);
         const healthData = JSON.parse(health.body);
@@ -72,6 +73,11 @@ async function verify() {
             && home.body.includes('Plan, zadania i organizacja')
             && health.status === 200 && healthData.status === 'ok'
             && aliasMalformed.status === 400
+            && oversized.status === 413
+            && home.headers['x-content-type-options'] === 'nosniff'
+            && home.headers['x-frame-options'] === 'DENY'
+            && home.headers['referrer-policy'] === 'same-origin'
+            && home.headers['permissions-policy'] === 'camera=(), geolocation=(), microphone=()'
             && manifest.status === 200 && manifestData.short_name === 'Flash Anzan';
         finish(ok ? 0 : 1, ok ? 'Smoke test HTTP/PWA: OK' : 'Smoke test HTTP/PWA: niepełna odpowiedź aplikacji.');
     } catch (error) {

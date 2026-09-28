@@ -308,6 +308,10 @@
                                     <button class="btn btn-secondary" onclick="app.multi.setTaskPoints()">Ustaw punkty</button>
                                     <button class="btn btn-secondary" onclick="app.multi.repeatTask()">Powtórz przykład</button>
                                 </div>
+                                <div style="display:flex; gap:0.5rem; align-items:end; margin-top:0.75rem; flex-wrap:wrap;">
+                                    <label style="flex:1; min-width:220px; text-align:left;"><span class="stat-label">Ranking uczniów podczas zajęć</span><select id="live-ranking-visibility" class="input-lg"><option value="visible">Widoczny</option><option value="hidden">Ukryty do końca</option></select><small class="field-help">Nauczyciel zawsze widzi pełny ranking.</small></label>
+                                    <button class="btn btn-secondary" onclick="app.multi.setRankingVisibility()">Zmień widoczność</button>
+                                </div>
                                 <button class="btn btn-secondary" style="margin-top:1rem; width:100%; font-size:0.9rem;"
                                     onclick="app.multi.forceEndRound()">⏹️ Zakończ Rundę</button>
                             </div>
@@ -695,7 +699,7 @@
                                     <label class="custom-field"><span>Punkty za poprawną odpowiedź</span><input id="host-task-points" type="number" min="0" max="100" step="1" value="10" class="input-lg"></label>
                                     <label class="custom-field"><span>Czas na odpowiedź (s)</span><input id="host-answer-time" type="number" min="5" max="120" step="1" value="30" class="input-lg"></label>
                                     <label class="custom-field"><span>Liczba zadań w sesji</span><input id="host-task-limit" type="number" min="0" max="100" step="1" value="0" class="input-lg"><small class="field-help">0 = bez limitu</small></label>
-                                    <label class="custom-field"><span>Ranking podczas gry</span><select id="host-ranking-visibility" class="input-lg"><option value="visible">Widoczny</option><option value="hidden">Ukryty do końca</option></select></label>
+                                    <label class="custom-field"><span>Ranking uczniów podczas gry</span><select id="host-ranking-visibility" class="input-lg"><option value="visible">Widoczny</option><option value="hidden">Ukryty do końca</option></select><small class="field-help">Nauczyciel zawsze widzi pełny ranking i może zmienić tę opcję w trakcie zajęć.</small></label>
                                 </div>
                                 <button class="btn btn-primary" onclick="app.multi.createRoom()">Utwórz pokój</button>
                             </div>

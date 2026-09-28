@@ -144,6 +144,7 @@
                 this.setStatus('online');
                 // Pasek boczny ma pokazywac dorobek konta od razu po zalogowaniu.
                 this.requestProfile();
+                this.flushSoloProgress();
             });
 
             s.on('auth_error', (d) => {
@@ -207,7 +208,19 @@
             s.on('server_shutdown', () => {
                 app.ui.toast('Serwer jest restartowany. Połączenie zostanie wznowione automatycznie.', 'warning');
             });
+            s.on('session_replaced', () => {
+                this._resetRoomState();
+                app.ui.toast('Sesję zajęć otwarto na innym urządzeniu.', 'warning');
+            });
             s.on('score_save_failed', (d) => app.ui.toast((d && d.message) || 'Nie zapisano wyniku.', 'warning'));
+            s.on('solo_progress_saved', () => this.requestProfile());
+            s.on('solo_progress_failed', (d) => {
+                this.pendingSoloXp = (this.pendingSoloXp || 0) + Math.max(0, Number(d && d.xp) || 0);
+                this.pendingSoloMode = (d && d.mode) || this.pendingSoloMode || 'flash';
+                if (this._soloFlushTimer) clearTimeout(this._soloFlushTimer);
+                this._soloFlushTimer = setTimeout(() => this.flushSoloProgress(), 30000);
+                app.ui.toast('Postęp solo czeka na ponowny zapis.', 'warning');
+            });
 
             // --- LOBBY & JOINING ---
 
@@ -219,6 +232,9 @@
                 if (!d.resumed) this.answeredTaskIndexes = new Set();
                 const livePoints = document.getElementById('live-task-points');
                 if (livePoints && Number.isInteger(d.pointsPerTask)) livePoints.value = d.pointsPerTask;
+                this.rankingVisibility = !!d.hideLeaderboard;
+                const liveVisibility = document.getElementById('live-ranking-visibility');
+                if (liveVisibility) liveVisibility.value = this.rankingVisibility ? 'hidden' : 'visible';
                 this.showLobby();
                 this.updateLobbyHeader();
 
@@ -253,6 +269,9 @@
 
             s.on('join_rejected', (d) => {
                 app.ui.modal("Nie udało się dołączyć", d.reason);
+            });
+            s.on('join_requested', () => {
+                app.ui.toast('Prośba wysłana. Poczekaj na akceptację nauczyciela.', 'info');
             });
             s.on('resume_failed', (d) => {
                 this._resetRoomState();
@@ -292,7 +311,10 @@
             s.on('lobby_update', (d) => {
                 this.roomLocked = !!d.locked;
                 this.roomState = d.state || 'lobby';
-                this.rankingHidden = !!d.hideLeaderboard;
+                this.rankingVisibility = !!d.hideLeaderboard;
+                this.rankingHidden = typeof d.leaderboardHidden === 'boolean' ? d.leaderboardHidden : !!d.hideLeaderboard;
+                const liveVisibility = document.getElementById('live-ranking-visibility');
+                if (liveVisibility && this.isHost) liveVisibility.value = this.rankingVisibility ? 'hidden' : 'visible';
                 this.updateLobbyHeader(); // Odśwież kłódkę i przyciski
                 this.renderPlayers(d.players);
                 const me = (d.players || []).find(player => player.uid === this.myUid);
@@ -460,6 +482,10 @@
                 if (input) input.value = d.points;
                 app.ui.toast(`Następne zadanie: ${d.points} pkt.`, 'success');
             });
+            s.on('ranking_visibility_updated', (d) => {
+                this.rankingVisibility = !!(d && d.hideLeaderboard);
+                app.ui.toast(this.rankingVisibility ? 'Ranking ukryty uczniom.' : 'Ranking widoczny dla uczniów.', 'info');
+            });
             s.on('session_completed', (d) => {
                 if (this.timerInterval) clearInterval(this.timerInterval);
                 this.roomState = 'completed';
@@ -589,6 +615,7 @@
                                 <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.listClassMembers('${he(item.id)}')">Uczniowie</button>
                                 <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassLeaderboard('${he(item.id)}')">Ranking</button>
                                 <button class="btn btn-secondary" style="font-size:0.75rem" onclick="app.multi.requestClassReport('${he(item.id)}')">Historia zajęć</button>
+                                ${item.active ? `<button class="btn btn-danger" style="font-size:0.75rem" onclick="app.multi.closeClass('${he(item.id)}')">Zamknij klasę</button>` : ''}
                             </span>
                         </div>
                         <div id="members-${he(item.id)}" style="margin-top:0.5rem;"></div>
@@ -656,7 +683,8 @@
         renderClassMembers: function (classId, members) {
             const box = document.getElementById('members-' + classId);
             if (!box) return;
-            const canManage = this.canTeach && (this.myClasses || []).some(item => item.id === classId);
+            const canManage = this.myRole === 'school_admin'
+                || (this.canTeach && (this.myClasses || []).some(item => item.id === classId));
             box.innerHTML = (members && members.length)
                 ? members.map(m => `
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:0.3rem 0.4rem; border-top:1px solid var(--glass-border);">
@@ -773,7 +801,31 @@
         },
         requestProfile: function () {
             this.init();
+            this.flushSoloProgress();
             this.socket.emit('request_profile');
+        },
+
+        recordSoloProgress: function (xp, mode) {
+            const delta = Math.max(0, Math.min(1000, Math.floor(Number(xp) || 0)));
+            if (!delta) return;
+            if (app._accountStats) {
+                app._accountStats.xp = Math.max(0, Number(app._accountStats.xp) || 0) + delta;
+                app.updateUI();
+            }
+            this.pendingSoloXp = (this.pendingSoloXp || 0) + delta;
+            this.pendingSoloMode = ['flash', 'spoken', 'survival', 'worksheet'].includes(mode) ? mode : 'flash';
+            if (this._soloFlushTimer) clearTimeout(this._soloFlushTimer);
+            this._soloFlushTimer = setTimeout(() => this.flushSoloProgress(), 10000);
+        },
+
+        flushSoloProgress: function () {
+            if (!this.socket || !this.socket.connected || !this.myUid || !(this.pendingSoloXp > 0)) return;
+            const xp = Math.min(1000, this.pendingSoloXp);
+            const mode = this.pendingSoloMode || 'flash';
+            this.pendingSoloXp -= xp;
+            if (this._soloFlushTimer) clearTimeout(this._soloFlushTimer);
+            this._soloFlushTimer = null;
+            this.socket.emit('save_solo_progress', { xp, mode });
         },
         renderLeaderboard: function (scope, board) {
             const el = document.getElementById('leaderboard-body');
@@ -857,6 +909,12 @@
             const points = Number(document.getElementById('live-task-points')?.value);
             if (!Number.isInteger(points) || points < 0 || points > 100) return app.ui.toast('Punkty ustaw w zakresie 0–100.', 'warning');
             this.socket.emit('set_task_points', { code: this.roomCode, points });
+        },
+
+        setRankingVisibility: function () {
+            if (!this.isHost || !this.roomCode || !this.socket) return;
+            const hidden = document.getElementById('live-ranking-visibility')?.value === 'hidden';
+            this.socket.emit('set_ranking_visibility', { code: this.roomCode, hideLeaderboard: hidden });
         },
 
         endSession: function () {

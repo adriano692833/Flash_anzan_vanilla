@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flash-anzan-school-7.6.0';
+const CACHE_NAME = 'flash-anzan-school-7.7.0';
 const APP_SHELL = [
   '/', '/index.html', '/manifest.webmanifest', '/icons/anzan-pro.svg',
   '/css/app.css', '/css/mobile.css', '/js/firebase-config.js', '/js/config.js',
