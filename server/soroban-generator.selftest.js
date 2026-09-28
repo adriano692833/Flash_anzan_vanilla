@@ -7,10 +7,10 @@ const G = require('./soroban-generator.js');
 
 // Tabela odwzorowuje pole `tier` + cyfry + tryb z DEFAULT_KYU (js/app.js).
 const KYU = {
-    20: { d: 1, o: { min: 3, max: 5 }, m: 'add', tier: 'direct', range: { min: 1, max: 4 } },
+    20: { d: 1, o: { min: 3, max: 5 }, m: 'add', tier: 'direct', range: { min: 1, max: 5 } },
     19: { d: 1, o: { min: 3, max: 5 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 1, max: 4 } },
     18: { d: 1, o: { min: 3, max: 6 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 1, max: 5 } },
-    17: { d: 1, o: { min: 4, max: 6 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 5, max: 5 } },
+    17: { d: 1, o: { min: 4, max: 6 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 1, max: 5 }, requiredAbsValue: 5 },
     16: { d: 1, o: { min: 4, max: 6 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 1, max: 9 } },
     15: { d: 1, o: { min: 4, max: 7 }, m: 'add', tier: 'friend5', range: { min: 1, max: 9 } },
     14: { d: 1, o: { min: 5, max: 7 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend5', range: { min: 1, max: 9 } },
@@ -44,6 +44,7 @@ for (const kyu of Object.keys(KYU)) {
         if (seq.length < minTerms || seq.length > maxTerms) badLengths++;
         if (!seq.every(Number.isSafeInteger) || !Number.isSafeInteger(seq.reduce((a, b) => a + b, 0))) badAnswers++;
         if (cfg.range && seq.some(term => Math.abs(term) < cfg.range.min || Math.abs(term) > cfg.range.max)) violations++;
+        if (cfg.requiredAbsValue && !seq.some(term => Math.abs(term) === cfg.requiredAbsValue)) violations++;
         let rods = [], running = 0;
         for (const term of seq) {
             const res = G.applyTerm(rods, Math.abs(term), term < 0 ? '-' : '+');
@@ -79,12 +80,41 @@ try { G.generateSequence({ m: 'mul', mul: { a: { min: 99999999, max: 99999999 },
 try { G.generateSequence({ m: 'div', div: { divisor: { min: 99999999, max: 99999999 }, quotient: { min: 99999999, max: 99999999 } } }); } catch (_) { unsafeRejected++; }
 if (unsafeRejected !== 2) violations++;
 
-// Historia przekazana przez pokój ma być izolowana i ograniczona rozmiarem.
+// Historia przekazana przez pokój ma być izolowana i ograniczona do 10 zadań.
 const historyA = [];
 const historyB = [];
 for (let i = 0; i < 40; i++) G.generateSequence(KYU[10], { history: historyA });
 G.generateSequence(KYU[10], { history: historyB });
-if (historyA.length !== 30 || historyB.length !== 1) violations++;
+if (historyA.length !== 10 || historyB.length !== 1) violations++;
+
+// Żaden poziom Kyu nie może powtórzyć zadania z poprzednich 10 rund.
+for (const kyu of Object.keys(KYU)) {
+    const cfg = KYU[kyu];
+    const previous = [];
+    const history = [];
+    for (let i = 0; i < 100; i++) {
+        const seq = G.generateSequence(cfg, { history });
+        const hash = (cfg.m || 'add') + ':' + seq.join(',');
+        if (previous.includes(hash)) violations++;
+        previous.push(hash);
+        if (previous.length > 10) previous.shift();
+    }
+}
+
+// Okno anty-powtórkowe obejmuje również mnożenie i dzielenie.
+for (const cfg of [
+    { m: 'mul', mul: { a: { min: 2, max: 20 }, b: { min: 2, max: 20 } } },
+    { m: 'div', div: { divisor: { min: 2, max: 20 }, quotient: { min: 2, max: 20 } } }
+]) {
+    const previous = [], history = [];
+    for (let i = 0; i < 100; i++) {
+        const seq = G.generateSequence(cfg, { history });
+        const hash = cfg.m + ':' + seq.join(',');
+        if (previous.includes(hash)) violations++;
+        previous.push(hash);
+        if (previous.length > 10) previous.shift();
+    }
+}
 
 console.log(`Naruszenia techniki: ${violations}`);
 console.log(`Sumy ujemne:         ${negatives}`);

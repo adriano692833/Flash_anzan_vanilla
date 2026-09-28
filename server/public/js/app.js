@@ -62,10 +62,10 @@ const DEFAULT_KYU = {
     //   direct   (bezpośrednie), friend5 (przyjaciele 5, bez przeniesienia),
     //   friend10 (przyjaciele 10, z przeniesieniem), full (wielocyfrowe mitori-zan).
     // Na poziomach jednorzędowych (direct/friend5) suma ≤ 9, więc 'o' jest mniejsze.
-    20: { id: 20, name: "20 Kyū · 1–4 bezpośrednio", category: "basic_introduction", tier: "direct", d: 1, o: { min: 3, max: 5 }, t: 8.0, m: 'add', ops: { add: true }, range: { min: 1, max: 4 }, techniques: ["basic_counting"] },
+    20: { id: 20, name: "20 Kyū · 1–5 bezpośrednio", category: "basic_introduction", tier: "direct", d: 1, o: { min: 3, max: 5 }, t: 8.0, m: 'add', ops: { add: true }, range: { min: 1, max: 5 }, techniques: ["basic_counting", "number_5"] },
     19: { id: 19, name: "19 Kyū · 1–4 dodawanie i odejmowanie", category: "basic", tier: "direct", d: 1, o: { min: 3, max: 5 }, t: 7.0, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 4 }, techniques: ["basic_counting"] },
     18: { id: 18, name: "18 Kyū · wprowadzenie liczby 5", category: "number_5_intro", tier: "direct", d: 1, o: { min: 3, max: 6 }, t: 6.0, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 5 }, techniques: ["basic_counting", "number_5"] },
-    17: { id: 17, name: "17 Kyū · +5 / −5", category: "rule_5_basic", tier: "direct", d: 1, o: { min: 4, max: 6 }, t: 5.0, m: 'mixed', ops: { add: true, sub: true }, range: { min: 5, max: 5 }, techniques: ["number_5"] },
+    17: { id: 17, name: "17 Kyū · działania z liczbą 5", category: "rule_5_basic", tier: "direct", d: 1, o: { min: 4, max: 6 }, t: 5.0, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 5 }, requiredAbsValue: 5, techniques: ["number_5"] },
     16: { id: 16, name: "16 Kyū · 1–9 bezpośrednio", category: "rule_5_consolidation", tier: "direct", d: 1, o: { min: 4, max: 6 }, t: 4.5, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 9 }, techniques: ["basic_counting"] },
     15: { id: 15, name: "15 Kyū · pełne 1–9", category: "single_digit_full", tier: "friend5", d: 1, o: { min: 4, max: 7 }, t: 4.0, m: 'add', ops: { add: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5"] },
     14: { id: 14, name: "14 Kyū · przyjaciele 5", category: "rule_5_master", tier: "friend5", d: 1, o: { min: 5, max: 7 }, t: 3.5, m: 'mixed', ops: { add: true, sub: true }, range: { min: 1, max: 9 }, techniques: ["rule_of_5_advanced"] },
@@ -86,12 +86,12 @@ const DEFAULT_KYU = {
 
 // Wersja drabinki kyū. Podbij przy zmianie DEFAULT_KYU, aby istniejący
 // użytkownicy (z configiem w localStorage) dostali nową drabinkę.
-const KYU_VERSION = 5;
+const KYU_VERSION = 6;
 
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.3.1 Persistent Training Setup';
+const APP_VERSION = '7.3.2 No Repeat Window';
 const APP_UPDATED = '2026-09-28';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -1176,16 +1176,16 @@ const app = {
         else if (operation === 'div') config.div = { divisor: { min: aMin, max: aMax }, quotient: { min: bMin, max: bMax } };
         else config.range = { min: aMin, max: aMax };
 
-        if (operation === 'add' || operation === 'mixed') {
-            let valid = true;
-            try {
-                for (let probe = 0; probe < 20; probe++) {
-                    if (window.SorobanGen.generateSequence(config, { history: [] }).length !== terms) valid = false;
-                }
-            } catch (error) { valid = false; }
-            if (!valid) {
-                return app.ui.toast('Ten zakres i technika nie pozwalają zbudować pełnej serii. Zwiększ zakres, skróć serię albo wybierz wyższą technikę.', 'warning');
+        let valid = true;
+        try {
+            const probeHistory = [];
+            for (let probe = 0; probe < 11; probe++) {
+                const sequence = window.SorobanGen.generateSequence(config, { history: probeHistory });
+                if ((operation === 'add' || operation === 'mixed') && sequence.length !== terms) valid = false;
             }
+        } catch (error) { valid = false; }
+        if (!valid) {
+            return app.ui.toast('Ta konfiguracja nie zapewnia 11 różnych pełnych zadań. Zwiększ zakres, zmień technikę lub liczbę składników.', 'warning');
         }
 
         const id = this._editingPresetId || `preset_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;

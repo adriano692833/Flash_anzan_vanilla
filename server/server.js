@@ -392,6 +392,9 @@ function validateConfig(config) {
         const rMax = clampInt(config.range.max, 1, 99999999, 9);
         safe.range = { min: rMin, max: Math.max(rMin, rMax) };
     }
+    if (config.requiredAbsValue != null) {
+        safe.requiredAbsValue = clampInt(config.requiredAbsValue, 1, 99999999, 1);
+    }
 
     const safeRange = (value, minFallback, maxFallback) => {
         if (!value || typeof value !== 'object') return null;

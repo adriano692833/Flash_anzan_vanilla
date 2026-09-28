@@ -268,39 +268,42 @@
 
     function generateSequence(cfg, opts) {
         const mode = cfg.m || 'add';
-        if (mode === 'mul') return generateMul(cfg);
-        if (mode === 'div') return generateDiv(cfg);
-
         const history = (opts && Array.isArray(opts.history)) ? opts.history : _lastSeqs;
+        const makeSequence = () => mode === 'mul' ? generateMul(cfg)
+            : mode === 'div' ? generateDiv(cfg)
+                : generateAddSub(cfg);
 
         // Generator krokowy może trafić w ślepy zaułek techniczny (najczęściej
         // na 20 Kyu, gdzie wolno używać wyłącznie ruchów bezpośrednich).
         // Konfiguracja jest kontraktem: liczba składników nigdy nie może wyjść
         // poza zadane `o`, dlatego odrzucamy skrócone próby w całości.
-        const minTerms = typeof cfg.o === 'number'
+        const minTerms = (mode === 'mul' || mode === 'div') ? 2 : typeof cfg.o === 'number'
             ? Math.max(2, Math.floor(cfg.o))
             : Math.max(2, Math.floor(Number(cfg.o && cfg.o.min) || 5));
-        const maxTerms = typeof cfg.o === 'number'
+        const maxTerms = (mode === 'mul' || mode === 'div') ? 2 : typeof cfg.o === 'number'
             ? minTerms
             : Math.max(minTerms, Math.floor(Number(cfg.o && cfg.o.max) || minTerms));
+        const requiredAbsValue = Number(cfg.requiredAbsValue);
 
-        let seq = generateAddSub(cfg);
-        let fallbackValid = null;
-        // Unikaj powtórek oraz serii niezgodnych z liczbą składników. Większy
-        // limit jest tani (lokalne obliczenia), a usuwa losowe skracanie zadań.
-        for (let retry = 0; retry < 100; retry++) {
-            const hash = seq.join(',');
+        let seq = makeSequence();
+        // Ostatnie 10 hashy stanowi twarde okno anty-powtórkowe. Dotyczy także
+        // mnożenia i dzielenia; prefiks operacji rozróżnia znaczenie operandów.
+        for (let retry = 0; retry < 300; retry++) {
+            const hash = mode + ':' + seq.join(',');
             const validLength = seq.length >= minTerms && seq.length <= maxTerms;
-            if (validLength) fallbackValid = seq;
-            if (validLength && history.indexOf(hash) === -1) break;
-            seq = generateAddSub(cfg);
+            const hasRequiredValue = !Number.isFinite(requiredAbsValue)
+                || seq.some(term => Math.abs(term) === requiredAbsValue);
+            if (validLength && hasRequiredValue && history.indexOf(hash) === -1) break;
+            seq = makeSequence();
         }
-        if ((seq.length < minTerms || seq.length > maxTerms) && fallbackValid) seq = fallbackValid;
-        if (seq.length < minTerms || seq.length > maxTerms) {
-            throw new Error('Nie udało się wygenerować pełnej serii zgodnej z konfiguracją.');
+        const hash = mode + ':' + seq.join(',');
+        const hasRequiredValue = !Number.isFinite(requiredAbsValue)
+            || seq.some(term => Math.abs(term) === requiredAbsValue);
+        if (seq.length < minTerms || seq.length > maxTerms || !hasRequiredValue || history.indexOf(hash) !== -1) {
+            throw new Error('Konfiguracja nie pozwala wygenerować zadania różnego od 10 poprzednich.');
         }
-        history.push(seq.join(','));
-        if (history.length > 30) history.shift();
+        history.push(hash);
+        if (history.length > 10) history.shift();
         return seq;
     }
 
