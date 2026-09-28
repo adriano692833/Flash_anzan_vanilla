@@ -287,9 +287,9 @@
                                 <div
                                     style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2rem;">
                                     <button class="btn btn-secondary" onclick="nav('dashboard')">Wyjdź</button>
-                                    <button class="btn btn-info" style="background: var(--warning); color: black;"
-                                        onclick="app.startGame()" title="Powtórz ten sam przykład">Powtórz</button>
-                                    <button class="btn btn-primary" onclick="app.checkGame()">Sprawdź</button>
+                                    <button id="game-repeat-btn" class="btn btn-info" style="background: var(--warning); color: black;"
+                                        onclick="app.repeatGame()" title="Powtórz ten sam przykład">Powtórz</button>
+                                    <button id="game-submit-btn" class="btn btn-primary" onclick="app.checkGame()">Sprawdź</button>
                                 </div>
                             </div>
                             <div id="teacher-live-view"
@@ -298,6 +298,11 @@
                                     Uczniów</h3>
                                 <div id="live-players-grid"
                                     style="display:grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap:0.5rem; max-height: 200px; overflow-y: auto;">
+                                </div>
+                                <div style="display:flex; gap:0.5rem; align-items:end; margin-top:1rem; flex-wrap:wrap;">
+                                    <label style="flex:1; min-width:180px; text-align:left;"><span class="stat-label">Punkty za następne zadanie</span><input id="live-task-points" type="number" min="0" max="100" step="1" value="10" class="input-lg"></label>
+                                    <button class="btn btn-secondary" onclick="app.multi.setTaskPoints()">Ustaw punkty</button>
+                                    <button class="btn btn-secondary" onclick="app.multi.repeatTask()">Powtórz przykład</button>
                                 </div>
                                 <button class="btn btn-secondary" style="margin-top:1rem; width:100%; font-size:0.9rem;"
                                     onclick="app.multi.forceEndRound()">⏹️ Zakończ Rundę</button>
@@ -682,6 +687,12 @@
                                     <option value="auto">Automatyczny (wszyscy widzą jednocześnie)</option>
                                     <option value="manual" selected>Ręczny (nauczyciel kontroluje)</option>
                                 </select>
+                                <div class="custom-config-grid" style="margin-bottom:1rem;">
+                                    <label class="custom-field"><span>Punkty za poprawną odpowiedź</span><input id="host-task-points" type="number" min="0" max="100" step="1" value="10" class="input-lg"></label>
+                                    <label class="custom-field"><span>Czas na odpowiedź (s)</span><input id="host-answer-time" type="number" min="5" max="120" step="1" value="30" class="input-lg"></label>
+                                    <label class="custom-field"><span>Liczba zadań w sesji</span><input id="host-task-limit" type="number" min="0" max="100" step="1" value="0" class="input-lg"><small class="field-help">0 = bez limitu</small></label>
+                                    <label class="custom-field"><span>Ranking podczas gry</span><select id="host-ranking-visibility" class="input-lg"><option value="visible">Widoczny</option><option value="hidden">Ukryty do końca</option></select></label>
+                                </div>
                                 <button class="btn btn-primary" onclick="app.multi.createRoom()">Utwórz pokój</button>
                             </div>
                         </div>
@@ -734,6 +745,8 @@
                                 style="display:none;">Zablokuj</button>
                             <button id="lobby-start-btn" class="btn btn-primary" onclick="app.multi.startGame()"
                                 style="display: none;">START GRY</button>
+                            <button id="lobby-ready-btn" class="btn btn-secondary" onclick="app.multi.toggleReady()"
+                                style="display:none;">JESTEM GOTOWY</button>
                             <button id="lobby-end-btn" class="btn btn-danger" onclick="app.multi.endSession()"
                                 style="display: none;">ZAKOŃCZ ZAJĘCIA</button>
                         </div>

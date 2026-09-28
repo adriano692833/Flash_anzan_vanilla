@@ -579,7 +579,7 @@ function makePlayer({ id, uid, name, avatar, role }) {
         role: role || 'player',
         xp: 0,
         totalTime: 0,
-        status: role === 'host' ? 'host' : 'ready',
+        status: role === 'host' ? 'host' : 'waiting',
         joinedAt: Date.now()
     };
 }
@@ -597,18 +597,31 @@ function sortPlayersForLobby(room) {
 function emitLobbyUpdate(code) {
     const room = rooms[code];
     if (!room) return;
-    io.to(code).emit('lobby_update', {
-        code,
-        state: room.state,
-        locked: !!room.locked,
-        players: sortPlayersForLobby(room)
-    });
+    const full = sortPlayersForLobby(room);
+    for (const player of Object.values(room.players)) {
+        const masked = room.hideLeaderboard && room.state === 'playing' && player.role !== 'host';
+        const players = masked ? full.map(row => ({ ...row, xp: null, totalTime: null })) : full;
+        io.to(player.id).emit('lobby_update', { code, state: room.state, locked: !!room.locked, players, hideLeaderboard: masked });
+    }
+}
+
+function emitLeaderboardUpdate(code) {
+    const room = rooms[code];
+    if (!room) return;
+    const full = sortPlayersForLobby(room);
+    for (const player of Object.values(room.players)) {
+        const masked = room.hideLeaderboard && room.state === 'playing' && player.role !== 'host';
+        const players = masked ? full.map(row => ({ ...row, xp: null, totalTime: null })) : full;
+        io.to(player.id).emit('leaderboard_update', { players, hidden: masked });
+    }
 }
 
 const pendingSessionWrites = new Set();
 
 function persistSession(room, reason) {
     if (!room?.classId || !room.startedAt || !room.sessionStats) return;
+    if (room._sessionPersisted) return;
+    room._sessionPersisted = true;
     const students = Object.values(room.sessionStats).map(stat => ({
         uid: String(stat.uid || ''),
         name: sanitizeName(stat.name),
@@ -674,6 +687,17 @@ function removePlayerFromRoom(code, socketId, reason) {
         }
     }
     if (room.host === socketId) {
+        if (reason === 'DISCONNECT') {
+            delete room.players[socketId];
+            room.host = null;
+            if (room.hostReconnectTimer) clearTimeout(room.hostReconnectTimer);
+            room.hostReconnectTimer = setTimeout(() => {
+                const current = rooms[code];
+                if (current && !current.host) closeRoom(code, 'HOST_RECONNECT_TIMEOUT');
+            }, 30000);
+            emitLobbyUpdate(code);
+            return;
+        }
         closeRoom(code, reason || 'HOST_LEFT');
         return;
     }
@@ -741,23 +765,40 @@ function publicLeaderboard(board, scoreField) {
 
 function clientTaskFor(room) {
     const presentationMs = 3000 + room.currentTask.numbers.length * taskDisplayTime(room.config) * 1000;
-    const answerWindowMs = room.mode === 'auto' ? 15000 : 60000;
+    const answerWindowMs = room.answerWindowMs;
     return {
         numbers: room.currentTask.numbers,
         operation: room.currentTask.operation,
         t: taskDisplayTime(room.config),
+        points: room.currentTask.points,
+        startsAt: room.roundStartsAt,
+        serverNow: Date.now(),
         presentationMs,
         answerWindowMs,
         roundDurationMs: presentationMs + answerWindowMs
     };
 }
 
+function emitTaskUpdate(code, repeated) {
+    const room = rooms[code];
+    if (!room || !room.currentTask) return;
+    const answered = room.answeredByTask[room.taskIndex] || new Set();
+    for (const player of Object.values(room.players)) {
+        io.to(player.id).emit('task_update', {
+            index: room.taskIndex,
+            repeated: !!repeated,
+            canAnswer: player.role !== 'host' && !answered.has(player.uid),
+            data: clientTaskFor(room)
+        });
+    }
+}
+
 function scheduleAutoAdvance(code, delayOverride) {
     const room = rooms[code];
     if (!room || room.mode !== 'auto' || room.state !== 'playing') return;
     if (room.autoAdvanceTimer) clearTimeout(room.autoAdvanceTimer);
-    const presentationMs = 3000 + room.currentTask.numbers.length * taskDisplayTime(room.config) * 1000;
-    const delay = Number.isFinite(delayOverride) ? delayOverride : presentationMs + 15000;
+    const untilAnswer = Math.max(0, room.answerOpensAt - Date.now());
+    const delay = Number.isFinite(delayOverride) ? delayOverride : untilAnswer + room.answerWindowMs;
     const expectedIndex = room.taskIndex;
     room.autoAdvanceTimer = setTimeout(() => {
         const current = rooms[code];
@@ -776,13 +817,26 @@ function scheduleAutoAdvance(code, delayOverride) {
 function advanceRoomTask(code) {
     const room = rooms[code];
     if (!room || room.state !== 'playing') return;
+    if (room.taskLimit > 0 && room.taskIndex + 1 >= room.taskLimit) {
+        room.state = 'completed';
+        room.acceptingAnswers = false;
+        if (room.autoAdvanceTimer) clearTimeout(room.autoAdvanceTimer);
+        const players = sortPlayersForLobby(room);
+        io.to(code).emit('session_completed', { players, taskCount: room.taskIndex + 1 });
+        emitLobbyUpdate(code);
+        persistSession(room, 'TASK_LIMIT');
+        return;
+    }
     room.taskIndex += 1;
     room.acceptingAnswers = true;
     for (const pid of Object.keys(room.players)) {
         if (room.players[pid].role !== 'host') room.players[pid].status = 'thinking';
     }
     room.currentTask = generateTask(room.config, room._seqHistory);
-    io.to(code).emit('task_update', { index: room.taskIndex, data: clientTaskFor(room) });
+    room.currentTask.points = room.nextTaskPoints;
+    room.roundStartsAt = Date.now() + 1200;
+    room.answerOpensAt = room.roundStartsAt + 3000 + room.currentTask.numbers.length * taskDisplayTime(room.config) * 1000;
+    emitTaskUpdate(code, false);
     emitLobbyUpdate(code);
     scheduleAutoAdvance(code);
 }
@@ -1545,7 +1599,7 @@ io.on('connection', (socket) => {
     });
 
     // 2. Create room (Host) — tylko nauczyciel; pokój powiązany z klasą.
-    socket.on('create_room', async ({ config, mode, classId }) => {
+    socket.on('create_room', async ({ config, mode, classId, pointsPerTask, answerTimeSeconds, taskLimit, hideLeaderboard }) => {
         if (!checkRateLimit(socket.id, 'create_room', 3, 10000)) return;
         if (!requireAuth()) return;
         if (!requireVerifiedStaff()) return;
@@ -1569,11 +1623,23 @@ io.on('connection', (socket) => {
         const safeConfig = validateConfig(config);
         try {
             // Nie twórz pokoju z konfiguracją, która nie potrafi wygenerować
-            // pełnego zadania. Chroni to także przed ręcznie spreparowanym klientem.
-            SorobanGen.generateSequence(safeConfig, { history: [] });
+            // pełnej puli bez powtórek. Chroni to także przed spreparowanym klientem.
+            let viable = false;
+            for (let attempt = 0; attempt < 3 && !viable; attempt++) {
+                try {
+                    const history = [];
+                    for (let round = 0; round < 11; round++) SorobanGen.generateSequence(safeConfig, { history });
+                    viable = true;
+                } catch (_) { /* ponów inną ścieżką losowania */ }
+            }
+            if (!viable) throw new Error('insufficient-task-pool');
         } catch (error) {
-            return socket.emit('error_msg', 'Ta konfiguracja nie pozwala utworzyć pełnego zadania. Zmień zakres, technikę lub liczbę składników.');
+            return socket.emit('error_msg', 'Ta konfiguracja nie zapewnia 11 różnych zadań. Zmień zakres, limit lub liczbę składników.');
         }
+
+        const safePoints = clampInt(pointsPerTask, 0, 100, pointsForConfig(safeConfig));
+        const safeAnswerSeconds = clampInt(answerTimeSeconds, 5, 120, 30);
+        const safeTaskLimit = clampInt(taskLimit, 0, 100, 0);
 
         rooms[code] = {
             code,
@@ -1595,6 +1661,12 @@ io.on('connection', (socket) => {
             answeredByTask: Object.create(null),
             acceptingAnswers: false,
             autoAdvanceTimer: null,
+            nextTaskPoints: safePoints,
+            answerWindowMs: safeAnswerSeconds * 1000,
+            taskLimit: safeTaskLimit,
+            hideLeaderboard: !!hideLeaderboard,
+            roundStartsAt: null,
+            answerOpensAt: null,
             sessionId: 'S' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(3).toString('hex'),
             startedAt: null,
             sessionStats: Object.create(null),
@@ -1613,7 +1685,7 @@ io.on('connection', (socket) => {
         socket.data.roomCode = code;
         socket.data.roomRole = 'host';
 
-        socket.emit('room_created', { code, classId: cls ? cls.id : null });
+        socket.emit('room_created', { code, classId: cls ? cls.id : null, pointsPerTask: safePoints, answerTimeSeconds: safeAnswerSeconds, taskLimit: safeTaskLimit, hideLeaderboard: !!hideLeaderboard });
         emitLobbyUpdate(code);
         console.log(`[ROOM] ${code} created by ${safeHostName} (class ${cls ? cls.id : '-'})`);
     });
@@ -1628,6 +1700,45 @@ io.on('connection', (socket) => {
         socket.emit('join_error', { reason: 'APPROVAL_REQUIRED', code });
     });
 
+    socket.on('resume_room', async (data) => {
+        if (!checkRateLimit(socket.id, 'resume_room', 5, 10000)) return;
+        if (!requireAuth()) return;
+        const code = sanitizeRoomCode(data?.code);
+        const room = rooms[code];
+        if (!room) return socket.emit('resume_failed', { reason: 'Pokój już nie istnieje.' });
+        if (room.hostUid === socket.uid) {
+            if (room.hostReconnectTimer) clearTimeout(room.hostReconnectTimer);
+            room.hostReconnectTimer = null;
+            const host = makePlayer({ id: socket.id, uid: socket.uid, name: room.hostName, avatar: socket.data.avatar, role: 'host' });
+            room.players[socket.id] = host;
+            room.host = socket.id;
+            socket.join(code);
+            socket.data.roomCode = code;
+            socket.data.roomRole = 'host';
+            socket.emit('room_created', { code, classId: room.classId, pointsPerTask: room.nextTaskPoints, answerTimeSeconds: room.answerWindowMs / 1000, taskLimit: room.taskLimit, hideLeaderboard: room.hideLeaderboard, resumed: true });
+        } else {
+            const stat = room.sessionStats && room.sessionStats[socket.uid];
+            if (!stat) return socket.emit('resume_failed', { reason: 'Nie znaleziono Twojej sesji.' });
+            const answered = room.answeredByTask[room.taskIndex] || new Set();
+            const player = makePlayer({ id: socket.id, uid: socket.uid, name: stat.name, avatar: socket.data.avatar, role: 'player' });
+            player.xp = stat.xp || 0;
+            player.totalTime = stat.totalTime || 0;
+            player.status = answered.has(socket.uid) ? 'done' : (room.state === 'lobby' ? 'ready' : 'thinking');
+            room.players[socket.id] = player;
+            socket.join(code);
+            socket.data.roomCode = code;
+            socket.data.roomRole = 'player';
+            socket.emit('join_accepted', { roomCode: code, name: player.name, avatar: player.avatar, resumed: true });
+        }
+        if (room.state === 'playing' && room.currentTask) {
+            const player = room.players[socket.id];
+            const answered = room.answeredByTask[room.taskIndex] || new Set();
+            socket.emit('game_started', { config: room.config, mode: room.mode, hideLeaderboard: room.hideLeaderboard });
+            socket.emit('task_update', { index: room.taskIndex, repeated: true, canAnswer: player.role !== 'host' && !answered.has(player.uid), data: clientTaskFor(room) });
+        }
+        emitLobbyUpdate(code);
+    });
+
     // 3b. Request join — wymaga zalogowanego ucznia.
     socket.on('request_join', async (data) => {
         if (!checkRateLimit(socket.id, 'request_join', 5, 10000)) return;
@@ -1637,7 +1748,28 @@ io.on('connection', (socket) => {
 
         if (!room) return socket.emit('error_msg', 'Pokój nie istnieje.');
         if (room.locked) return socket.emit('join_rejected', { reason: 'Pokój jest zablokowany.' });
-        if (room.state !== 'lobby') return socket.emit('join_rejected', { reason: 'Zajęcia już trwają.' });
+        if (room.state === 'playing') {
+            const stat = room.sessionStats && room.sessionStats[socket.uid];
+            if (!stat || (room.classId && !await isClassMember(room.classId, socket.uid))) {
+                return socket.emit('join_rejected', { reason: 'Zajęcia już trwają.' });
+            }
+            if (roomHasUid(room, socket.uid)) return socket.emit('join_rejected', { reason: 'To konto jest już w pokoju.' });
+            const answered = room.answeredByTask[room.taskIndex] || new Set();
+            const player = makePlayer({ id: socket.id, uid: socket.uid, name: stat.name, avatar: socket.data.avatar, role: 'player' });
+            player.xp = stat.xp || 0;
+            player.totalTime = stat.totalTime || 0;
+            player.status = answered.has(socket.uid) ? 'done' : 'thinking';
+            room.players[socket.id] = player;
+            socket.join(code);
+            socket.data.roomCode = code;
+            socket.data.roomRole = 'player';
+            socket.emit('join_accepted', { roomCode: code, name: player.name, avatar: player.avatar, resumed: true });
+            socket.emit('game_started', { config: room.config, mode: room.mode, hideLeaderboard: room.hideLeaderboard });
+            socket.emit('task_update', { index: room.taskIndex, repeated: true, canAnswer: !answered.has(socket.uid), data: clientTaskFor(room) });
+            emitLobbyUpdate(code);
+            return;
+        }
+        if (room.state !== 'lobby') return socket.emit('join_rejected', { reason: 'Zajęcia nie przyjmują nowych graczy.' });
         if (room.players[socket.id]) {
             socket.join(code);
             socket.data.roomCode = code;
@@ -1721,6 +1853,9 @@ io.on('connection', (socket) => {
                 avatar: pending.avatar,
                 role: 'player'
             });
+            if (!room.sessionStats[pending.uid]) {
+                room.sessionStats[pending.uid] = { uid: pending.uid, name: pending.name, attempts: 0, correct: 0, xp: 0, totalTime: 0 };
+            }
 
             delete room.pending[pendingId];
 
@@ -1760,6 +1895,16 @@ io.on('connection', (socket) => {
         emitLobbyUpdate(c);
     });
 
+    socket.on('toggle_ready', ({ code }) => {
+        if (!checkRateLimit(socket.id, 'toggle_ready', 10, 10000)) return;
+        const c = sanitizeRoomCode(code);
+        const room = rooms[c];
+        const player = room && room.players[socket.id];
+        if (!room || room.state !== 'lobby' || !player || player.role === 'host') return;
+        player.status = player.status === 'ready' ? 'waiting' : 'ready';
+        emitLobbyUpdate(c);
+    });
+
     socket.on('kick_player', ({ code, playerId }) => {
         if (!checkRateLimit(socket.id, 'kick_player', 10, 10000)) return;
         const c = sanitizeRoomCode(code);
@@ -1794,12 +1939,26 @@ io.on('connection', (socket) => {
         closeRoom(code, 'TEACHER_ENDED');
     });
 
+    socket.on('leave_room', (data) => {
+        if (!checkRateLimit(socket.id, 'leave_room', 3, 10000)) return;
+        const code = sanitizeRoomCode(data?.code);
+        const room = rooms[code];
+        if (!room || !room.players[socket.id]) return;
+        removePlayerFromRoom(code, socket.id, 'LEFT');
+        socket.leave(code);
+        socket.data.roomCode = null;
+        socket.data.roomRole = null;
+    });
+
     socket.on('host_start_game', async (data) => {
         if (!checkRateLimit(socket.id, 'host_start_game', 3, 10000)) return;
         const code = sanitizeRoomCode(data?.code);
         const room = rooms[code];
         if (!room || socket.id !== room.host) return;
         if (room.state !== 'lobby') return socket.emit('error_msg', 'Te zajęcia już zostały rozpoczęte.');
+        const students = Object.values(room.players).filter(player => player.role !== 'host');
+        if (!students.length) return socket.emit('error_msg', 'Do rozpoczęcia potrzebny jest co najmniej jeden uczeń.');
+        if (students.some(player => player.status !== 'ready')) return socket.emit('error_msg', 'Poczekaj, aż wszyscy uczniowie oznaczą gotowość.');
 
         room.state = 'playing';
         room.started = true;
@@ -1825,10 +1984,13 @@ io.on('connection', (socket) => {
         }
 
         room.currentTask = generateTask(room.config, room._seqHistory);
+        room.currentTask.points = room.nextTaskPoints;
+        room.roundStartsAt = Date.now() + 1200;
+        room.answerOpensAt = room.roundStartsAt + 3000 + room.currentTask.numbers.length * taskDisplayTime(room.config) * 1000;
         room.acceptingAnswers = true;
 
-        io.to(code).emit('game_started', { config: room.config, mode: room.mode });
-        io.to(code).emit('task_update', { index: 0, data: clientTaskFor(room) });
+        io.to(code).emit('game_started', { config: room.config, mode: room.mode, hideLeaderboard: room.hideLeaderboard });
+        emitTaskUpdate(code, false);
         emitLobbyUpdate(code);
         scheduleAutoAdvance(code);
     });
@@ -1839,6 +2001,28 @@ io.on('connection', (socket) => {
         const room = rooms[code];
         if (!room || socket.id !== room.host || room.state !== 'playing') return;
         advanceRoomTask(code);
+    });
+
+    socket.on('repeat_task', (data) => {
+        if (!checkRateLimit(socket.id, 'repeat_task', 5, 5000)) return;
+        const code = sanitizeRoomCode(data?.code);
+        const room = rooms[code];
+        if (!room || socket.id !== room.host || room.state !== 'playing' || !room.currentTask) return;
+        room.acceptingAnswers = true;
+        room.roundStartsAt = Date.now() + 1200;
+        room.answerOpensAt = room.roundStartsAt + 3000 + room.currentTask.numbers.length * taskDisplayTime(room.config) * 1000;
+        emitTaskUpdate(code, true);
+        emitLobbyUpdate(code);
+        scheduleAutoAdvance(code);
+    });
+
+    socket.on('set_task_points', (data) => {
+        if (!checkRateLimit(socket.id, 'set_task_points', 10, 10000)) return;
+        const code = sanitizeRoomCode(data?.code);
+        const room = rooms[code];
+        if (!room || socket.id !== room.host) return;
+        room.nextTaskPoints = clampInt(data?.points, 0, 100, room.nextTaskPoints);
+        socket.emit('task_points_updated', { points: room.nextTaskPoints });
     });
 
     socket.on('force_end_round', (data) => {
@@ -1872,6 +2056,7 @@ io.on('connection', (socket) => {
         if (!player || player.role === 'host') return;
         if (!room.currentTask) return;
         if (!room.acceptingAnswers) return socket.emit('answer_rejected', { reason: 'ROUND_CLOSED' });
+        if (Date.now() < room.answerOpensAt) return socket.emit('answer_rejected', { reason: 'TOO_EARLY' });
         if (!Number.isInteger(data?.taskIndex) || data.taskIndex !== room.taskIndex) {
             return socket.emit('answer_rejected', { reason: 'STALE_TASK' });
         }
@@ -1880,7 +2065,7 @@ io.on('connection', (socket) => {
         if (!room.answeredByTask[room.taskIndex]) {
             room.answeredByTask[room.taskIndex] = new Set();
         }
-        if (room.answeredByTask[room.taskIndex].has(player.uid)) return;
+        if (room.answeredByTask[room.taskIndex].has(player.uid)) return socket.emit('answer_rejected', { reason: 'ALREADY_ANSWERED' });
         room.answeredByTask[room.taskIndex].add(player.uid);
 
         player.status = 'done';
@@ -1902,7 +2087,7 @@ io.on('connection', (socket) => {
 
         let xpEarned = 0;
         if (correct) {
-            xpEarned = pointsForConfig(room.config); // punkty zależne od trudności poziomu
+            xpEarned = clampInt(room.currentTask.points, 0, 100, pointsForConfig(room.config));
             player.xp += xpEarned;
             stat.xp += xpEarned;
             // Punkty z zajęć (multiplayer) trafiają do rankingu klasy/roku ORAZ do
@@ -1918,15 +2103,13 @@ io.on('connection', (socket) => {
         }
 
         // Time — validate range (0..5 min in ms)
-        if (Number.isFinite(data?.time) && data.time >= 0 && data.time < 300000) {
-            player.totalTime = (player.totalTime || 0) + data.time;
-            stat.totalTime += data.time;
-        }
+        const serverTime = Math.max(0, Date.now() - room.answerOpensAt);
+        player.totalTime = (player.totalTime || 0) + serverTime;
+        stat.totalTime += serverTime;
 
         socket.emit('validation_result', { correct, xp: xpEarned, corAnswer: expected });
 
-        const players = sortPlayersForLobby(room);
-        io.to(code).emit('leaderboard_update', { players });
+        emitLeaderboardUpdate(code);
         emitLobbyUpdate(code);
         const activePlayers = Object.values(room.players).filter(p => p.role !== 'host');
         if (room.mode === 'auto' && activePlayers.length > 0 && activePlayers.every(p => p.status === 'done')) {

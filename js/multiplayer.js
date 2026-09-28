@@ -20,6 +20,7 @@
         role: '',
         isHost: false,
         roomLocked: false, // Stan lokalny blokady
+        answeredTaskIndexes: new Set(),
 
         init: function () {
             // Socket juz istnieje: nigdy nie gubimy referencji (to zostawialo zombie
@@ -118,6 +119,10 @@
                 if (app.auth && typeof app.auth._rememberRole === 'function') app.auth._rememberRole(d.role);
                 this.myUid = d.uid;
                 this.schoolId = d.schoolId || '';
+                if (this._resumeRoomCode) {
+                    s.emit('resume_room', { code: this._resumeRoomCode });
+                    this._resumeRoomCode = '';
+                }
                 this.schoolRole = d.schoolRole || '';
                 this.canTeach = !!d.canTeach;
                 this.pendingTeacherCode = '';
@@ -211,6 +216,9 @@
                 this.role = 'host';
                 this.isHost = true;
                 this.roomLocked = false;
+                if (!d.resumed) this.answeredTaskIndexes = new Set();
+                const livePoints = document.getElementById('live-task-points');
+                if (livePoints && Number.isInteger(d.pointsPerTask)) livePoints.value = d.pointsPerTask;
                 this.showLobby();
                 this.updateLobbyHeader();
 
@@ -237,7 +245,7 @@
                 this.isHost = false;
                 this.showLobby();
                 this.updateLobbyHeader();
-                app.ui.toast("Nauczyciel Cię wpuścił! Powodzenia.", 'success');
+                app.ui.toast(d.resumed ? 'Wróciłeś do trwających zajęć.' : "Nauczyciel Cię wpuścił! Powodzenia.", 'success');
 
                 // Ustawiamy adapter multiplayer
                 app.adapter = app.adapters.multiplayer;
@@ -245,6 +253,10 @@
 
             s.on('join_rejected', (d) => {
                 app.ui.modal("Nie udało się dołączyć", d.reason);
+            });
+            s.on('resume_failed', (d) => {
+                this._resetRoomState();
+                app.ui.toast((d && d.reason) || 'Nie udało się wrócić do pokoju.', 'warning');
             });
 
             s.on('join_error', (d) => {
@@ -280,8 +292,15 @@
             s.on('lobby_update', (d) => {
                 this.roomLocked = !!d.locked;
                 this.roomState = d.state || 'lobby';
+                this.rankingHidden = !!d.hideLeaderboard;
                 this.updateLobbyHeader(); // Odśwież kłódkę i przyciski
                 this.renderPlayers(d.players);
+                const me = (d.players || []).find(player => player.uid === this.myUid);
+                const readyBtn = document.getElementById('lobby-ready-btn');
+                if (readyBtn && me && !this.isHost) {
+                    readyBtn.innerText = me.status === 'ready' ? 'COFNIJ GOTOWOŚĆ' : 'JESTEM GOTOWY';
+                    readyBtn.className = me.status === 'ready' ? 'btn btn-primary' : 'btn btn-secondary';
+                }
 
                 if (this.isHost) {
                     this.updateLiveDashboard(d.players);
@@ -362,6 +381,9 @@
                 // podwójne odliczanie i wygenerowanie liczb lokalnie (zanim przyjdą z serwera).
                 const tId = 'multi_temp';
                 this.roundMode = d.mode === 'auto' ? 'auto' : 'manual';
+                this.rankingHidden = !!d.hideLeaderboard;
+                const ranking = document.getElementById('ranking-panel');
+                if (ranking && !this.isHost) ranking.style.display = this.rankingHidden ? 'none' : 'block';
                 app.kyu[tId] = d.config;
                 // Dodaj tymczasową opcję do selecta, jeśli nie istnieje
                 let opt = document.querySelector(`#game-kyu option[value="${tId}"]`);
@@ -400,6 +422,8 @@
                 }
                 document.getElementById('game-kyu').value = tId;
                 this.currentTaskIndex = Number.isInteger(d.index) ? d.index : null;
+                app.state.answerLocked = d.canAnswer === false;
+                app.state.taskPoints = Number.isInteger(d.data.points) ? d.data.points : null;
 
                 // Nadpisz sekwencję liczb danymi z serwera
                 app.state.nums = d.data.numbers;
@@ -408,19 +432,42 @@
                 else app.state.sum = d.data.numbers.reduce((a, b) => a + b, 0);
                 app.state.mode = 'flash';
 
-                app.startGame();
-                this.startRoundTimer(d.data);
+                const waitMs = Math.max(0, Number(d.data.startsAt) - Number(d.data.serverNow));
+                setTimeout(() => {
+                    if (this.currentTaskIndex !== d.index) return;
+                    app.startGame();
+                    this.startRoundTimer(d.data);
+                }, Math.min(waitMs, 5000));
             });
 
             s.on('validation_result', (d) => this._handleValidationResult(d));
-            s.on('answer_rejected', () => {
+            s.on('answer_rejected', (d) => {
+                if (d && d.reason === 'ALREADY_ANSWERED') {
+                    app.state.answerLocked = true;
+                    app.state.checked = true;
+                }
                 if (this._pendingValidation) {
                     const pending = this._pendingValidation;
                     this._pendingValidation = null;
                     if (this._pendingValidationTimeout) clearTimeout(this._pendingValidationTimeout);
                     this._pendingValidationTimeout = null;
-                    pending.reject(new Error('Runda już się zmieniła.'));
+                    const reasons = { ALREADY_ANSWERED: 'Odpowiedź na to zadanie została już zapisana.', TOO_EARLY: 'Poczekaj do końca serii liczb.', ROUND_CLOSED: 'Runda jest już zamknięta.', STALE_TASK: 'Runda już się zmieniła.' };
+                    pending.reject(new Error(reasons[d && d.reason] || 'Odpowiedź została odrzucona.'));
                 }
+            });
+            s.on('task_points_updated', (d) => {
+                const input = document.getElementById('live-task-points');
+                if (input) input.value = d.points;
+                app.ui.toast(`Następne zadanie: ${d.points} pkt.`, 'success');
+            });
+            s.on('session_completed', (d) => {
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                this.roomState = 'completed';
+                this.renderPlayers(d.players || []);
+                app.ui.toast(`Sesja zakończona po ${d.taskCount} zadaniach.`, 'success');
+                nav('multiplayer');
+                this.showLobby();
+                this.updateLobbyHeader();
             });
 
             s.on('round_ended', (d) => {
@@ -447,14 +494,21 @@
             const mode = document.getElementById('host-mode').value;
             const classSel = document.getElementById('host-class');
             const classId = classSel ? classSel.value : '';
+            const pointsPerTask = Number(document.getElementById('host-task-points')?.value);
+            const answerTimeSeconds = Number(document.getElementById('host-answer-time')?.value);
+            const taskLimit = Number(document.getElementById('host-task-limit')?.value);
+            const hideLeaderboard = document.getElementById('host-ranking-visibility')?.value === 'hidden';
 
             if (!this.canTeach) return app.ui.toast('Brak uprawnienia do prowadzenia zajęć.', 'warning');
             if (!classId) return app.ui.toast('Wybierz klasę dla pokoju.', 'warning');
             if (!trainingConfig) return app.ui.toast('Wybierz poziom lub zapisaną konfigurację.', 'warning');
+            if (!Number.isInteger(pointsPerTask) || pointsPerTask < 0 || pointsPerTask > 100) return app.ui.toast('Punkty ustaw w zakresie 0–100.', 'warning');
+            if (!Number.isInteger(answerTimeSeconds) || answerTimeSeconds < 5 || answerTimeSeconds > 120) return app.ui.toast('Czas odpowiedzi ustaw w zakresie 5–120 sekund.', 'warning');
+            if (!Number.isInteger(taskLimit) || taskLimit < 0 || taskLimit > 100) return app.ui.toast('Liczbę zadań ustaw w zakresie 0–100.', 'warning');
 
             this.init();
             // Tożsamość/rola już zarejestrowane przez authenticate(); wysyłamy sam pokój.
-            this.socket.emit('create_room', { config: trainingConfig, mode, classId });
+            this.socket.emit('create_room', { config: trainingConfig, mode, classId, pointsPerTask, answerTimeSeconds, taskLimit, hideLeaderboard });
         },
 
         createSchool: function () {
@@ -790,6 +844,21 @@
             }
         },
 
+        toggleReady: function () {
+            if (this.socket && this.roomCode && !this.isHost) this.socket.emit('toggle_ready', { code: this.roomCode });
+        },
+
+        repeatTask: function () {
+            if (this.socket && this.roomCode && this.isHost) this.socket.emit('repeat_task', { code: this.roomCode });
+        },
+
+        setTaskPoints: function () {
+            if (!this.socket || !this.roomCode || !this.isHost) return;
+            const points = Number(document.getElementById('live-task-points')?.value);
+            if (!Number.isInteger(points) || points < 0 || points > 100) return app.ui.toast('Punkty ustaw w zakresie 0–100.', 'warning');
+            this.socket.emit('set_task_points', { code: this.roomCode, points });
+        },
+
         endSession: function () {
             if (!this.socket || !this.isHost || !this.roomCode) return;
             if (!confirm('Zakończyć zajęcia i zapisać raport klasy?')) return;
@@ -844,6 +913,11 @@
             this.roomLocked = false;
             this.roomState = 'lobby';
             this.currentTaskIndex = null;
+            this.answeredTaskIndexes = new Set();
+            app.state.answerLocked = false;
+            app.state.taskPoints = null;
+            const ranking = document.getElementById('ranking-panel');
+            if (ranking) ranking.style.display = 'block';
 
             // Przywróć lokalny adapter
             app.adapter = app.adapters.local;
@@ -858,6 +932,7 @@
         // zeby Socket.IO samo sie wpielo z powrotem i ponowilo rejestracje w 'connect'.
         _handleDisconnect: function (reason) {
             const wasInRoom = !!this.roomCode;
+            if (wasInRoom) this._resumeRoomCode = this.roomCode;
             this._resetRoomState();
             this.setStatus('offline');
             if (wasInRoom) app.ui.toast('Utracono połączenie — wracam do serwera…', 'warning');
@@ -865,6 +940,9 @@
 
         // Swiadome wyjscie uzytkownika (przycisk „Opuść Pokój" / wylogowanie).
         leaveRoom: function () {
+            const code = this.roomCode;
+            const wasHost = this.isHost;
+            if (this.socket && code) this.socket.emit(wasHost ? 'close_room' : 'leave_room', { code });
             this._resetRoomState();
             if (this.socket) {
                 this.socket.disconnect();
@@ -881,6 +959,7 @@
             const lockBtn = document.getElementById('lobby-lock-btn');
             const startBtn = document.getElementById('lobby-start-btn');
             const endBtn = document.getElementById('lobby-end-btn');
+            const readyBtn = document.getElementById('lobby-ready-btn');
 
             if (codeEl) {
                 const lockIcon = this.roomLocked ? 'ZABLOKOWANY' : '';
@@ -900,6 +979,7 @@
             if (endBtn) {
                 endBtn.style.display = this.isHost ? 'block' : 'none';
             }
+            if (readyBtn) readyBtn.style.display = !this.isHost && this.roomState === 'lobby' ? 'block' : 'none';
         },
 
         renderPlayers: function (l) {
@@ -931,8 +1011,8 @@
                             </div>
                             <div style="text-align:right; display:flex; align-items:center; gap:1rem;">
                                 <div>
-                                    <div style="font-weight:bold; color:var(--accent)">${p.xp || 0} XP</div>
-                                    <div style="font-size:0.8rem; color:#aaa">⏱️ ${((p.totalTime || 0) / 1000).toFixed(1)}s</div>
+                                    <div style="font-weight:bold; color:var(--accent)">${p.xp == null ? '—' : p.xp} XP</div>
+                                    <div style="font-size:0.8rem; color:#aaa">⏱️ ${p.totalTime == null ? '—' : (p.totalTime / 1000).toFixed(1) + 's'}</div>
                                 </div>
                                 ${kickHtml}
                             </div>
@@ -971,10 +1051,14 @@
         },
 
         updateMiniBoard: function (players) {
+            if (this.rankingHidden && !this.isHost) {
+                this.lastMiniBoard.innerHTML = '<div style="color:var(--text-muted)">Ranking zostanie pokazany po zakończeniu sesji.</div>';
+                return;
+            }
             this.lastMiniBoard.innerHTML = players.slice(0, 5).map((p, i) => `
                 <div style="display:flex; justify-content:space-between; margin-bottom: 2px; font-size: 0.8rem;">
                     <span>#${i + 1} ${he(p.name)}</span>
-                    <span>${p.xp}xp (${((p.totalTime || 0) / 1000).toFixed(1)}s)</span>
+                    <span>${p.xp == null ? '—' : p.xp + 'xp'} (${p.totalTime == null ? '—' : ((p.totalTime || 0) / 1000).toFixed(1) + 's'})</span>
                 </div>
             `).join('');
         },
@@ -1008,6 +1092,7 @@
         showLobby: function () { this._show('lobby'); },
 
         _handleValidationResult: function (d) {
+            if (Number.isInteger(this.currentTaskIndex)) this.answeredTaskIndexes.add(this.currentTaskIndex);
             // Jeśli czekamy na Promise (submitAnswer)
             if (this._pendingValidation) {
                 if (this._pendingValidationTimeout) {

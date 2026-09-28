@@ -91,7 +91,7 @@ const KYU_VERSION = 6;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.4 Student Training Flow';
+const APP_VERSION = '7.5 Multiplayer Classroom';
 const APP_UPDATED = '2026-09-28';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -126,7 +126,7 @@ const app = {
     kyu: null,
     customPresets: [],
     user: { xp: 0, level: 1, streak: 0, settings: { sound: true, wsTime: 5 } },
-    state: { mode: '', nums: [], sum: null, idx: 0, timer: null, wsExp: [], checked: false, maxResult: null, termCount: null, countdownTimer: null, sequenceTimer: null, roundToken: 0, survivalConfig: null },
+    state: { mode: '', nums: [], sum: null, idx: 0, timer: null, wsExp: [], checked: false, maxResult: null, termCount: null, countdownTimer: null, sequenceTimer: null, roundToken: 0, survivalConfig: null, answerLocked: false, taskPoints: null },
 
     multi: null,
 
@@ -340,6 +340,15 @@ const app = {
         app.ui.toast('Trening anulowany.', 'info');
     },
 
+    repeatGame: function () {
+        const multiplayer = this.adapter && this.adapters && this.adapter === this.adapters.multiplayer;
+        if (multiplayer) {
+            if (this.multi && this.multi.isHost) this.multi.repeatTask();
+            return;
+        }
+        this.startGame();
+    },
+
     startGame: function () {
         let kId = document.getElementById('game-kyu').value;
 
@@ -505,6 +514,8 @@ const app = {
         document.getElementById('audio-display').style.display = 'none';
         const cancelButton = document.getElementById('game-cancel-btn');
         if (cancelButton) cancelButton.style.display = serverDriven ? 'none' : 'block';
+        const repeatButton = document.getElementById('game-repeat-btn');
+        if (repeatButton) repeatButton.style.display = !serverDriven || (this.multi && this.multi.isHost) ? 'block' : 'none';
 
         this._stopRoundTimers();
         const roundToken = (this.state.roundToken || 0) + 1;
@@ -526,7 +537,8 @@ const app = {
                 this.state.countdownTimer = null;
                 audio.startBeep();
                 el.style.display = 'none';
-                if (phase) phase.innerText = this.state.mode === 'spoken' ? 'SERIA GŁOSOWA' : 'SERIA LICZB';
+                const points = Number.isInteger(this.state.taskPoints) ? ` · ${this.state.taskPoints} PKT` : '';
+                if (phase) phase.innerText = (this.state.mode === 'spoken' ? 'SERIA GŁOSOWA' : 'SERIA LICZB') + points;
 
 
 
@@ -722,10 +734,17 @@ const app = {
             document.getElementById('game-input').style.display = 'block'; // FIX: Pokaż input
             const phase = document.getElementById('game-phase-label');
             const counter = document.getElementById('game-counter');
-            if (phase) phase.innerText = 'PODAJ WYNIK';
+            const locked = !!this.state.answerLocked;
+            const points = Number.isInteger(this.state.taskPoints) ? ` · ${this.state.taskPoints} PKT` : '';
+            if (phase) phase.innerText = (locked ? 'ODPOWIEDŹ JUŻ ZAPISANA' : 'PODAJ WYNIK') + points;
             if (counter) counter.innerText = `KONIEC SERII · ${this.state.nums.length} LICZB`;
-            document.getElementById('game-answer').value = '';
-            document.getElementById('game-answer').focus();
+            const answer = document.getElementById('game-answer');
+            const submit = document.getElementById('game-submit-btn');
+            answer.value = '';
+            answer.disabled = locked;
+            answer.placeholder = locked ? 'Odpowiedź została już zapisana' : '?';
+            if (submit) submit.style.display = locked ? 'none' : 'block';
+            if (!locked) answer.focus();
             return;
         }
         const n = this.state.nums[this.state.idx];
@@ -808,8 +827,8 @@ const app = {
                 }
             }).catch((err) => {
                 console.error('Validation error:', err);
-                this.state.checked = false;
-                app.ui.toast('Błąd walidacji odpowiedzi.', 'error');
+                if (!this.state.answerLocked) this.state.checked = false;
+                app.ui.toast((err && err.message) || 'Błąd walidacji odpowiedzi.', 'error');
             });
         } catch (e) {
             console.error(e);
