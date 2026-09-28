@@ -361,6 +361,7 @@
                 // wywołuje app.startGame(). Uruchomienie gry również tutaj powodowało
                 // podwójne odliczanie i wygenerowanie liczb lokalnie (zanim przyjdą z serwera).
                 const tId = 'multi_temp';
+                this.roundMode = d.mode === 'auto' ? 'auto' : 'manual';
                 app.kyu[tId] = d.config;
                 // Dodaj tymczasową opcję do selecta, jeśli nie istnieje
                 let opt = document.querySelector(`#game-kyu option[value="${tId}"]`);
@@ -408,7 +409,7 @@
                 app.state.mode = 'flash';
 
                 app.startGame();
-                this.startRoundTimer();
+                this.startRoundTimer(d.data);
             });
 
             s.on('validation_result', (d) => this._handleValidationResult(d));
@@ -423,14 +424,14 @@
             });
 
             s.on('round_ended', (d) => {
-                if (d.reason === 'TIMEOUT') {
-                    if (!app.state.checked) {
-                        // Czas minął, a gracz nie odpowiedział -> Auto fail
-                        const inp = document.getElementById('game-answer');
-                        if (inp) inp.value = '0';
-                        app.checkGame();
-                        app.ui.toast("Czas minął! ⏰", 'info');
-                    }
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                if ((d.reason === 'TIMEOUT' || d.reason === 'AUTO') && !this.isHost && !app.state.checked) {
+                    app.state.checked = true;
+                    app.state.lastOk = false;
+                    app.showResultScreenLocal(false, 0, NaN, false);
+                    const answer = document.getElementById('res-correct');
+                    if (answer) answer.innerText = app.state.sum;
+                    app.ui.toast("Czas na odpowiedź minął.", 'info');
                 }
             });
 
@@ -946,22 +947,23 @@
             this.lastLeaderboardData = l;
         },
 
-        startRoundTimer: function () {
+        startRoundTimer: function (taskData) {
             if (this.timerInterval) clearInterval(this.timerInterval);
-            this.timeLeft = 60;
+            const durationMs = Number(taskData && taskData.roundDurationMs);
+            this.timeLeft = Math.max(1, Math.ceil((Number.isFinite(durationMs) ? durationMs : 60000) / 1000));
             const timerDisplay = document.getElementById('lobby-timer');
             if (timerDisplay) {
                 timerDisplay.style.display = 'block';
-                timerDisplay.innerText = "⏳ 60s";
+                timerDisplay.innerText = this.timeLeft + " s";
             }
 
             this.timerInterval = setInterval(() => {
                 this.timeLeft--;
-                if (timerDisplay) timerDisplay.innerText = "⏳ " + this.timeLeft + "s";
+                if (timerDisplay) timerDisplay.innerText = this.timeLeft + " s";
 
                 if (this.timeLeft <= 0) {
                     clearInterval(this.timerInterval);
-                    if (this.isHost) {
+                    if (this.isHost && this.roundMode !== 'auto') {
                         this.forceEndRound();
                     }
                 }

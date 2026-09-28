@@ -235,7 +235,12 @@
             aMin = Math.pow(10, d - 1); aMax = Math.pow(10, d) - 1;
             bMin = 2; bMax = 9;
         }
-        return [randInt(aMin, aMax), randInt(bMin, bMax)];
+        if (aMin * bMin > Number.MAX_SAFE_INTEGER) throw new Error('Wynik mnożenia przekracza bezpieczny zakres liczb całkowitych.');
+        for (let tries = 0; tries < 100; tries++) {
+            const a = randInt(aMin, aMax), b = randInt(bMin, bMax);
+            if (Number.isSafeInteger(a * b)) return [a, b];
+        }
+        return [aMin, bMin];
     }
 
     // --- Dzielenie (A ÷ B = C bez reszty). A = B × C ---
@@ -247,9 +252,12 @@
         } else {
             bMin = 2; bMax = 9; cMin = 2; cMax = 9;
         }
-        const B = randInt(bMin, bMax);
-        const C = randInt(cMin, cMax);
-        return [B * C, B];
+        if (bMin * cMin > Number.MAX_SAFE_INTEGER) throw new Error('Dzielna przekracza bezpieczny zakres liczb całkowitych.');
+        for (let tries = 0; tries < 100; tries++) {
+            const B = randInt(bMin, bMax), C = randInt(cMin, cMax);
+            if (Number.isSafeInteger(B * C)) return [B * C, B];
+        }
+        return [bMin * cMin, bMin];
     }
 
     // --- Dyspozytor + deduplikacja ostatnich sekwencji ---
@@ -265,12 +273,31 @@
 
         const history = (opts && Array.isArray(opts.history)) ? opts.history : _lastSeqs;
 
+        // Generator krokowy może trafić w ślepy zaułek techniczny (najczęściej
+        // na 20 Kyu, gdzie wolno używać wyłącznie ruchów bezpośrednich).
+        // Konfiguracja jest kontraktem: liczba składników nigdy nie może wyjść
+        // poza zadane `o`, dlatego odrzucamy skrócone próby w całości.
+        const minTerms = typeof cfg.o === 'number'
+            ? Math.max(2, Math.floor(cfg.o))
+            : Math.max(2, Math.floor(Number(cfg.o && cfg.o.min) || 5));
+        const maxTerms = typeof cfg.o === 'number'
+            ? minTerms
+            : Math.max(minTerms, Math.floor(Number(cfg.o && cfg.o.max) || minTerms));
+
         let seq = generateAddSub(cfg);
-        // unikaj powtórek i zbyt trywialnych (1-składnikowych) sekwencji
-        for (let retry = 0; retry < 20; retry++) {
+        let fallbackValid = null;
+        // Unikaj powtórek oraz serii niezgodnych z liczbą składników. Większy
+        // limit jest tani (lokalne obliczenia), a usuwa losowe skracanie zadań.
+        for (let retry = 0; retry < 100; retry++) {
             const hash = seq.join(',');
-            if (seq.length >= 2 && history.indexOf(hash) === -1) break;
+            const validLength = seq.length >= minTerms && seq.length <= maxTerms;
+            if (validLength) fallbackValid = seq;
+            if (validLength && history.indexOf(hash) === -1) break;
             seq = generateAddSub(cfg);
+        }
+        if ((seq.length < minTerms || seq.length > maxTerms) && fallbackValid) seq = fallbackValid;
+        if (seq.length < minTerms || seq.length > maxTerms) {
+            throw new Error('Nie udało się wygenerować pełnej serii zgodnej z konfiguracją.');
         }
         history.push(seq.join(','));
         if (history.length > 30) history.shift();

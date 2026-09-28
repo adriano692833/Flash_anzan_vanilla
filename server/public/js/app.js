@@ -26,15 +26,26 @@ const audio = {
         setTimeout(() => this.playTone(784, 'sine', 0.2), 200);
     },
     error: function () { this.playTone(150, 'sawtooth', 0.3); setTimeout(() => this.playTone(100, 'sawtooth', 0.3), 150); },
-    speak: function (txt) {
-        if (!this.enabled) return;
-        if (!this.hasVoiceSupport()) return;
+    speak: function (txt, onDone) {
+        if (!this.enabled || !this.hasVoiceSupport()) return false;
         this.init(); window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(txt);
         u.lang = 'pl-PL';
         const v = this.voices.find(x => x.lang && x.lang.toLowerCase().includes('pl'));
         if (v) u.voice = v;
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            if (typeof onDone === 'function') onDone();
+        };
+        u.onend = finish;
+        u.onerror = finish;
+        // Niektóre silniki (szczególnie mobilne) nie wywołują `onend` po
+        // przerwaniu syntezy. Bezpiecznik nie pozwala zawiesić całej rundy.
+        setTimeout(finish, Math.max(5000, String(txt).length * 1200));
         window.speechSynthesis.speak(u);
+        return true;
     },
     hasVoiceSupport: function () {
         return typeof window !== 'undefined' && 'speechSynthesis' in window;
@@ -80,8 +91,8 @@ const KYU_VERSION = 5;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.2 Structural UI';
-const APP_UPDATED = '2026-09-27';
+const APP_VERSION = '7.3 Verified Task Engine';
+const APP_UPDATED = '2026-09-28';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
 const FLASH_SPEEDS = [8.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.5, 1.0, 0.7, 0.5, 0.3];
@@ -369,7 +380,11 @@ const app = {
             }
 
             this.state.checked = false; // Reset flagi
-        } catch (e) { console.error(e); return; }
+        } catch (e) {
+            console.error(e);
+            app.ui.toast('Nie udało się utworzyć zadania zgodnego z konfiguracją. Zmień zakres, technikę lub liczbę składników.', 'error');
+            return;
+        }
 
         if (this.events) {
             this.events.emit('round:prepared', { cfgId: kId, cfg: cfg, nums: (this.state.nums || []).slice(), sum: this.state.sum, mode: this.state.mode });
@@ -414,7 +429,7 @@ const app = {
     // --- EXTRAS ---
     startSurvival: function () {
         this.state.mode = 'survival';
-        this.state.survivalLevel = 10;
+        this.state.survivalLevel = 20;
         this.state.survivalStreak = 0;
         app.ui.modal("Tryb Survival", "Grasz do pierwszego błędu. Poziom rośnie co 3 wygrane. Powodzenia!");
         this.startGame();
@@ -502,20 +517,29 @@ const app = {
         const n = this.state.nums[this.state.idx];
         // document.getElementById('game-counter').innerText = `${this.state.idx + 1}/${this.state.nums.length}`;
 
-        if (this.state.mode === 'flash') {
+        if (this.state.mode !== 'spoken') {
             const v = document.getElementById('visual-display');
             v.style.display = 'flex'; v.innerText = n;
             v.classList.remove('flash-anim'); void v.offsetWidth; v.classList.add('flash-anim');
+            // `t` oznacza pełny odstęp start→start. Krótka pusta klatka jest
+            // częścią tego czasu, a nie ukrytą dopłatą 150 ms do konfiguracji.
+            const intervalMs = Math.max(100, Number(this.state.flashSpeed || cfg.t) * 1000);
+            const gapMs = Math.min(150, Math.max(20, intervalMs * 0.15));
             setTimeout(() => {
                 v.innerText = ''; this.state.idx++;
-                setTimeout(() => this.runSequence(cfg), 150);
-            }, (this.state.flashSpeed || cfg.t) * 1000);
+                setTimeout(() => this.runSequence(cfg), gapMs);
+            }, intervalMs - gapMs);
         } else {
             const a = document.getElementById('audio-display');
             a.style.display = 'block';
-            audio.speak(n.toString());
             this.state.idx++;
-            setTimeout(() => this.runSequence(cfg), 1000 + (n.toString().length * 300));
+            const startedAt = Date.now();
+            const intervalMs = Math.max(100, Number(this.state.flashSpeed || cfg.t) * 1000);
+            const next = () => setTimeout(
+                () => this.runSequence(cfg),
+                Math.max(0, intervalMs - (Date.now() - startedAt))
+            );
+            if (!audio.speak(n.toString(), next)) setTimeout(() => this.runSequence(cfg), intervalMs);
         }
     },
 
@@ -523,7 +547,9 @@ const app = {
         if (this.state.checked) return;
         this.state.checked = true;
 
-        const u = parseInt(document.getElementById('game-answer').value);
+        const answerRaw = String(document.getElementById('game-answer').value || '').trim();
+        const answerNumber = answerRaw === '' ? NaN : Number(answerRaw);
+        const u = Number.isSafeInteger(answerNumber) ? answerNumber : NaN;
         const expected = this.state.sum;
         const timeTaken = Date.now() - (this.state.startTime || Date.now());
 
@@ -701,15 +727,27 @@ const app = {
                 ${htmlContent}
                 <input class="input-lg ws-inp" type="number" inputmode="numeric" placeholder="=" style="text-align: right;">`;
                 g.appendChild(d);
-            } catch (e) { break; }
+            } catch (e) {
+                console.error(e);
+                g.innerHTML = '';
+                document.getElementById('ws-content').style.display = 'none';
+                document.getElementById('ws-start-overlay').style.display = 'block';
+                app.ui.toast('Nie udało się utworzyć pełnego arkusza zgodnego z konfiguracją.', 'error');
+                return;
+            }
         }
 
-        let t = this.user.settings.wsTime * 60;
+        let t = Math.max(1, Math.min(180, Number(this.user.settings.wsTime) || 5)) * 60;
         const te = document.getElementById('ws-timer');
         if (this.state.timer) clearInterval(this.state.timer);
-        this.state.timer = setInterval(() => {
-            t--; let m = Math.floor(t / 60), s = t % 60;
+        const renderTime = () => {
+            const m = Math.floor(t / 60), s = t % 60;
             te.innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+        };
+        renderTime();
+        this.state.timer = setInterval(() => {
+            t--;
+            renderTime();
             if (t <= 0) this.finishWorksheet();
         }, 1000);
     },
@@ -722,7 +760,9 @@ const app = {
         const inps = document.querySelectorAll('.ws-inp');
         let corr = 0;
         inps.forEach((el, i) => {
-            if (parseInt(el.value) === this.state.wsExp[i]) { corr++; el.style.borderColor = 'lime'; }
+            const raw = String(el.value || '').trim();
+            const value = raw === '' ? NaN : Number(raw);
+            if (Number.isSafeInteger(value) && value === this.state.wsExp[i]) { corr++; el.style.borderColor = 'lime'; }
             else el.style.borderColor = 'red';
         });
         audio.success();
@@ -929,9 +969,17 @@ const app = {
         if (edit) edit.innerHTML = Object.keys(this.kyu).sort((a, b) => b - a)
             .map(k => `<option value="${k}">${this._escapeHtml(this.kyu[k].name || (k + ' Kyū'))}</option>`).join('');
 
-        // Prędkość flash — osobna oś, niezależna od poziomu (jak w soroban-schule)
+        // Prędkość jest osobną osią, ale musi zawierać dokładne wartości z Kyu
+        // i konfiguracji własnych (np. 1,8 s), bez cichego zaokrąglania.
         const sp = document.getElementById('game-speed');
-        if (sp) sp.innerHTML = FLASH_SPEEDS.map(v => `<option value="${v.toFixed(1)}">${v.toFixed(1)} s</option>`).join('');
+        if (sp) {
+            const configured = Object.values(this.kyu || {}).map(c => Number(c && c.t));
+            const custom = (this.customPresets || []).map(p => Number(p && p.config && p.config.t));
+            const speeds = Array.from(new Set(FLASH_SPEEDS.concat(configured, custom)
+                .filter(v => Number.isFinite(v) && v >= 0.1 && v <= 60)))
+                .sort((a, b) => b - a);
+            sp.innerHTML = speeds.map(v => `<option value="${v}">${v.toFixed(1)} s</option>`).join('');
+        }
 
         this.renderCustomPresets();
     },
@@ -966,7 +1014,7 @@ const app = {
                 category: '',
                 tier,
                 d: Math.floor(clamp(source.d, 1, 8, 1)),
-                o: Math.floor(clamp(source.o, 2, 50, 5)),
+                o: (operation === 'mul' || operation === 'div') ? 2 : Math.floor(clamp(source.o, 2, 50, 5)),
                 t: clamp(source.t, 0.1, 60, 2),
                 m: operation,
                 ops: { add: operation !== 'div' && operation !== 'mul', sub: operation === 'mixed' }
@@ -1071,6 +1119,13 @@ const app = {
         setDisplay('custom-range-b-min-field', hasSecondRange);
         setDisplay('custom-range-b-max-field', hasSecondRange);
         setDisplay('custom-tier-field', !hasSecondRange);
+        const termsInput = document.getElementById('custom-terms');
+        if (termsInput) {
+            termsInput.disabled = hasSecondRange;
+            if (hasSecondRange) termsInput.value = 2;
+            const label = termsInput.closest('label')?.querySelector('span');
+            if (label) label.innerText = hasSecondRange ? 'Liczba operandów (stała)' : 'Liczb w serii';
+        }
         if (operation === 'mul') {
             setText('custom-range-a-label', 'Czynnik A — od'); setText('custom-range-a-max-label', 'Czynnik A — do');
             setText('custom-range-b-label', 'Czynnik B — od'); setText('custom-range-b-max-label', 'Czynnik B — do');
@@ -1099,13 +1154,17 @@ const app = {
         if ((operation === 'mul' || operation === 'div') && (![bMin, bMax].every(Number.isFinite) || bMin < 1 || bMax < bMin || bMax > 99999999)) {
             return app.ui.toast('Popraw drugi zakres liczb.', 'warning');
         }
-        if (terms < 2 || terms > 50 || time < 0.1 || time > 60) {
+        if ((operation === 'mul' || operation === 'div') && aMax * bMax > Number.MAX_SAFE_INTEGER) {
+            return app.ui.toast('Zakres jest zbyt duży — wynik nie byłby liczony dokładnie. Zmniejsz jedną z górnych granic.', 'warning');
+        }
+        const hasSecondRange = operation === 'mul' || operation === 'div';
+        if ((!hasSecondRange && (terms < 2 || terms > 50)) || time < 0.1 || time > 60) {
             return app.ui.toast('Seria: 2–50 liczb. Czas: 0,1–60 s.', 'warning');
         }
         const tier = document.getElementById('custom-tier')?.value || 'full';
         const config = {
             name, presetName: name, category: '', tier: (operation === 'mul' || operation === 'div') ? 'full' : tier,
-            d: Math.min(8, String(aMax).length), o: terms, t: time, m: operation,
+            d: Math.min(8, String(aMax).length), o: hasSecondRange ? 2 : terms, t: time, m: operation,
             ops: { add: operation === 'add' || operation === 'mixed', sub: operation === 'mixed' }
         };
         if (operation === 'mul') config.mul = { a: { min: aMin, max: aMax }, b: { min: bMin, max: bMax } };
@@ -1113,8 +1172,13 @@ const app = {
         else config.range = { min: aMin, max: aMax };
 
         if (operation === 'add' || operation === 'mixed') {
-            const probes = Array.from({ length: 8 }, () => window.SorobanGen.generateAddSub(config));
-            if (probes.some(sequence => sequence.length !== terms)) {
+            let valid = true;
+            try {
+                for (let probe = 0; probe < 20; probe++) {
+                    if (window.SorobanGen.generateSequence(config, { history: [] }).length !== terms) valid = false;
+                }
+            } catch (error) { valid = false; }
+            if (!valid) {
                 return app.ui.toast('Ten zakres i technika nie pozwalają zbudować pełnej serii. Zwiększ zakres, skróć serię albo wybierz wyższą technikę.', 'warning');
             }
         }
@@ -1171,12 +1235,9 @@ const app = {
             if (cfg.m === 'mul') rangeText = `${cfg.mul.a.min}–${cfg.mul.a.max} × ${cfg.mul.b.min}–${cfg.mul.b.max}`;
             else if (cfg.m === 'div') rangeText = `dzielnik ${cfg.div.divisor.min}–${cfg.div.divisor.max}, wynik ${cfg.div.quotient.min}–${cfg.div.quotient.max}`;
             else rangeText = `${cfg.range.min}–${cfg.range.max}`;
-            return `<article class="custom-preset-card"><div class="custom-preset-card-header"><h4>${this._escapeHtml(item.name)}</h4><span class="preset-badge">${gameLabels[item.game] || 'Wszystkie'}</span></div><p>${opLabels[cfg.m] || cfg.m} · zakres ${rangeText} · ${cfg.o} liczb · ${cfg.t} s</p><div class="custom-preset-actions"><button class="btn btn-secondary" onclick="app.openCustomConfig('${item.game}', '', '${item.id}')">Edytuj</button><button class="btn btn-danger" onclick="app.deleteCustomConfig('${item.id}')">Usuń</button></div></article>`;
+            const countText = (cfg.m === 'mul' || cfg.m === 'div') ? '2 operandy' : `${cfg.o} składników`;
+            return `<article class="custom-preset-card"><div class="custom-preset-card-header"><h4>${this._escapeHtml(item.name)}</h4><span class="preset-badge">${gameLabels[item.game] || 'Wszystkie'}</span></div><p>${opLabels[cfg.m] || cfg.m} · zakres ${rangeText} · ${countText} · ${cfg.t} s</p><div class="custom-preset-actions"><button class="btn btn-secondary" onclick="app.openCustomConfig('${item.game}', '', '${item.id}')">Edytuj</button><button class="btn btn-danger" onclick="app.deleteCustomConfig('${item.id}')">Usuń</button></div></article>`;
         }).join('');
-    },
-    // Najbliższa dostępna prędkość z FLASH_SPEEDS do zadanej wartości
-    _closestSpeed: function (t) {
-        return FLASH_SPEEDS.reduce((best, v) => Math.abs(v - t) < Math.abs(best - t) ? v : best, FLASH_SPEEDS[0]);
     },
     updateGameInfo: function () {
         const c = this.getTrainingConfig(document.getElementById('game-kyu').value);
@@ -1184,9 +1245,15 @@ const app = {
         const dStr = (typeof c.d === 'object') ? `${c.d.min}-${c.d.max}` : c.d;
         const oStr = (typeof c.o === 'object') ? `${c.o.min}-${c.o.max}` : c.o;
 
-        // Domyślna prędkość poziomu (najbliższa z listy) — gracz może zmienić suwakiem
+        // Domyślna prędkość poziomu — dokładnie taka, jak w konfiguracji.
         const sp = document.getElementById('game-speed');
-        if (sp) sp.value = this._closestSpeed(c.t).toFixed(1);
+        if (sp) {
+            const exact = String(Number(c.t));
+            if (!Array.from(sp.options).some(option => option.value === exact)) {
+                sp.add(new Option(`${Number(c.t).toFixed(1)} s`, exact));
+            }
+            sp.value = exact;
+        }
 
         document.getElementById('info-d').innerText = dStr;
         document.getElementById('info-o').innerText = oStr;
@@ -1413,7 +1480,10 @@ const app = {
         this.updateGameInfo();
     },
     saveSettings: function () {
-        this.user.settings.wsTime = parseInt(document.getElementById('sett-ws-time').value);
+        const input = document.getElementById('sett-ws-time');
+        const parsed = Math.floor(Number(input.value));
+        this.user.settings.wsTime = Number.isFinite(parsed) ? Math.max(1, Math.min(180, parsed)) : 5;
+        input.value = this.user.settings.wsTime;
         this.save();
     },
     toggleSound: function (v) {

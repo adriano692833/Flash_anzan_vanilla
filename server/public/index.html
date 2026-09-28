@@ -355,7 +355,7 @@
 
                         <label class="stat-label">Operacja</label>
                         <select id="ws-op" class="input-lg">
-                            <option value="">Dodawanie / Odejmowanie (見取算)</option>
+                            <option value="">Według wybranego poziomu / konfiguracji</option>
                             <option value="mul">Mnożenie (×)</option>
                             <option value="div">Dzielenie (÷)</option>
                         </select>
@@ -399,6 +399,7 @@
                     <div class="config-row">
                         <span>⏱️ Czas na arkusz (min)</span>
                         <input type="number" id="sett-ws-time" class="input-lg" style="width: 80px;" value="5"
+                            min="1" max="180" step="1"
                             onchange="app.saveSettings()">
                     </div>
                 </div>

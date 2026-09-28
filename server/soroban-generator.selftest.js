@@ -14,20 +14,23 @@ const KYU = {
     16: { d: 1, o: { min: 4, max: 6 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'direct', range: { min: 1, max: 9 } },
     15: { d: 1, o: { min: 4, max: 7 }, m: 'add', tier: 'friend5', range: { min: 1, max: 9 } },
     14: { d: 1, o: { min: 5, max: 7 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend5', range: { min: 1, max: 9 } },
-    13: { d: 1, o: { min: 5, max: 10 }, m: 'add', tier: 'friend10' },
-    12: { d: 1, o: { min: 5, max: 10 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend10' },
-    11: { d: 1, o: { min: 10, max: 15 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend10' },
-    10: { d: 2, o: { min: 5, max: 10 }, m: 'add', tier: 'full' },
-    9: { d: 2, o: { min: 5, max: 8 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'full' },
+    13: { d: 1, o: { min: 5, max: 10 }, m: 'add', tier: 'friend10', range: { min: 1, max: 9 } },
+    12: { d: 1, o: { min: 5, max: 10 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend10', range: { min: 1, max: 9 } },
+    11: { d: 1, o: { min: 10, max: 15 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'friend10', range: { min: 1, max: 9 } },
+    10: { d: 2, o: { min: 5, max: 10 }, m: 'add', tier: 'full', range: { min: 10, max: 99 } },
+    9: { d: 2, o: { min: 5, max: 8 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'full', range: { min: 10, max: 99 } },
     8: { d: 3, o: { min: 5, max: 10 }, m: 'add', tier: 'full', range: { min: 10, max: 999 } },
-    6: { d: 4, o: { min: 5, max: 10 }, m: 'add', tier: 'full' },
-    5: { d: 5, o: { min: 3, max: 7 }, m: 'add', tier: 'full' },
-    3: { d: 8, o: { min: 3, max: 5 }, m: 'add', tier: 'full' },
-    1: { d: 8, o: { min: 8, max: 12 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'full' }
+    7: { d: 3, o: { min: 5, max: 10 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'full', range: { min: 100, max: 999 } },
+    6: { d: 4, o: { min: 5, max: 10 }, m: 'add', tier: 'full', range: { min: 100, max: 9999 } },
+    5: { d: 5, o: { min: 3, max: 7 }, m: 'add', tier: 'full', range: { min: 10000, max: 99999 } },
+    4: { d: 7, o: { min: 3, max: 7 }, m: 'add', tier: 'full', range: { min: 100000, max: 9999999 } },
+    3: { d: 8, o: { min: 3, max: 5 }, m: 'add', tier: 'full', range: { min: 10000000, max: 99999999 } },
+    2: { d: 8, o: { min: 5, max: 8 }, m: 'add', tier: 'full', range: { min: 10000000, max: 99999999 } },
+    1: { d: 8, o: { min: 8, max: 12 }, m: 'mixed', ops: { add: true, sub: true }, tier: 'full', range: { min: 10000000, max: 99999999 } }
 };
 
 const TIER = G.TIER;
-let violations = 0, negatives = 0, empties = 0;
+let violations = 0, negatives = 0, empties = 0, badLengths = 0, badAnswers = 0;
 const N = 2000;
 
 for (const kyu of Object.keys(KYU)) {
@@ -36,6 +39,11 @@ for (const kyu of Object.keys(KYU)) {
     for (let s = 0; s < N; s++) {
         const seq = G.generateSequence(cfg);
         if (!seq.length) { empties++; continue; }
+        const minTerms = typeof cfg.o === 'number' ? cfg.o : cfg.o.min;
+        const maxTerms = typeof cfg.o === 'number' ? cfg.o : cfg.o.max;
+        if (seq.length < minTerms || seq.length > maxTerms) badLengths++;
+        if (!seq.every(Number.isSafeInteger) || !Number.isSafeInteger(seq.reduce((a, b) => a + b, 0))) badAnswers++;
+        if (cfg.range && seq.some(term => Math.abs(term) < cfg.range.min || Math.abs(term) > cfg.range.max)) violations++;
         let rods = [], running = 0;
         for (const term of seq) {
             const res = G.applyTerm(rods, Math.abs(term), term < 0 ? '-' : '+');
@@ -59,11 +67,17 @@ for (let i = 0; i < N; i++) {
 // Operacje dodatkowe muszą zawsze dawać całkowity, dodatni wynik.
 for (let i = 0; i < N; i++) {
     const mul = G.generateSequence({ m: 'mul', d: 2, mul: { a: { min: 10, max: 99 }, b: { min: 2, max: 9 } } });
-    if (mul.length !== 2 || !Number.isInteger(mul[0] * mul[1]) || mul[0] < 1 || mul[1] < 1) violations++;
+    if (mul.length !== 2 || !Number.isSafeInteger(mul[0] * mul[1]) || mul[0] < 1 || mul[1] < 1) violations++;
 
     const div = G.generateSequence({ m: 'div', d: 2, div: { divisor: { min: 2, max: 9 }, quotient: { min: 2, max: 99 } } });
-    if (div.length !== 2 || div[1] === 0 || !Number.isInteger(div[0] / div[1]) || div[0] < 1) violations++;
+    if (div.length !== 2 || div[1] === 0 || !Number.isSafeInteger(div[0]) || !Number.isInteger(div[0] / div[1]) || div[0] < 1) violations++;
 }
+
+// Zakresy indywidualne nie mogą produkować liczb poza dokładnością IEEE-754.
+let unsafeRejected = 0;
+try { G.generateSequence({ m: 'mul', mul: { a: { min: 99999999, max: 99999999 }, b: { min: 99999999, max: 99999999 } } }); } catch (_) { unsafeRejected++; }
+try { G.generateSequence({ m: 'div', div: { divisor: { min: 99999999, max: 99999999 }, quotient: { min: 99999999, max: 99999999 } } }); } catch (_) { unsafeRejected++; }
+if (unsafeRejected !== 2) violations++;
 
 // Historia przekazana przez pokój ma być izolowana i ograniczona rozmiarem.
 const historyA = [];
@@ -75,7 +89,9 @@ if (historyA.length !== 30 || historyB.length !== 1) violations++;
 console.log(`Naruszenia techniki: ${violations}`);
 console.log(`Sumy ujemne:         ${negatives}`);
 console.log(`Puste sekwencje:     ${empties}`);
-if (violations === 0 && negatives === 0 && empties === 0) {
+console.log(`Zła liczba składników: ${badLengths}`);
+console.log(`Niepoprawne wyniki:    ${badAnswers}`);
+if (violations === 0 && negatives === 0 && empties === 0 && badLengths === 0 && badAnswers === 0) {
     console.log('WYNIK: OK');
     process.exit(0);
 } else {

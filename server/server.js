@@ -734,10 +734,15 @@ function publicLeaderboard(board, scoreField) {
 }
 
 function clientTaskFor(room) {
+    const presentationMs = 3000 + room.currentTask.numbers.length * taskDisplayTime(room.config) * 1000;
+    const answerWindowMs = room.mode === 'auto' ? 15000 : 60000;
     return {
         numbers: room.currentTask.numbers,
         operation: room.currentTask.operation,
-        t: taskDisplayTime(room.config)
+        t: taskDisplayTime(room.config),
+        presentationMs,
+        answerWindowMs,
+        roundDurationMs: presentationMs + answerWindowMs
     };
 }
 
@@ -745,12 +750,13 @@ function scheduleAutoAdvance(code, delayOverride) {
     const room = rooms[code];
     if (!room || room.mode !== 'auto' || room.state !== 'playing') return;
     if (room.autoAdvanceTimer) clearTimeout(room.autoAdvanceTimer);
-    const presentationMs = 3000 + room.currentTask.numbers.length * (taskDisplayTime(room.config) * 1000 + 150);
+    const presentationMs = 3000 + room.currentTask.numbers.length * taskDisplayTime(room.config) * 1000;
     const delay = Number.isFinite(delayOverride) ? delayOverride : presentationMs + 15000;
     const expectedIndex = room.taskIndex;
     room.autoAdvanceTimer = setTimeout(() => {
         const current = rooms[code];
         if (!current || current.state !== 'playing' || current.taskIndex !== expectedIndex) return;
+        current.acceptingAnswers = false;
         io.to(code).emit('round_ended', { reason: 'AUTO', index: current.taskIndex });
         current.autoAdvanceTimer = setTimeout(() => {
             const afterGrace = rooms[code];
@@ -765,6 +771,7 @@ function advanceRoomTask(code) {
     const room = rooms[code];
     if (!room || room.state !== 'playing') return;
     room.taskIndex += 1;
+    room.acceptingAnswers = true;
     for (const pid of Object.keys(room.players)) {
         if (room.players[pid].role !== 'host') room.players[pid].status = 'thinking';
     }
@@ -1554,6 +1561,13 @@ io.on('connection', (socket) => {
         const code = generateRoomCodeUnique();
         const safeHostName = socket.data.name;
         const safeConfig = validateConfig(config);
+        try {
+            // Nie twórz pokoju z konfiguracją, która nie potrafi wygenerować
+            // pełnego zadania. Chroni to także przed ręcznie spreparowanym klientem.
+            SorobanGen.generateSequence(safeConfig, { history: [] });
+        } catch (error) {
+            return socket.emit('error_msg', 'Ta konfiguracja nie pozwala utworzyć pełnego zadania. Zmień zakres, technikę lub liczbę składników.');
+        }
 
         rooms[code] = {
             code,
@@ -1573,6 +1587,7 @@ io.on('connection', (socket) => {
             started: false,
             currentTask: null,
             answeredByTask: Object.create(null),
+            acceptingAnswers: false,
             autoAdvanceTimer: null,
             sessionId: 'S' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(3).toString('hex'),
             startedAt: null,
@@ -1804,6 +1819,7 @@ io.on('connection', (socket) => {
         }
 
         room.currentTask = generateTask(room.config, room._seqHistory);
+        room.acceptingAnswers = true;
 
         io.to(code).emit('game_started', { config: room.config, mode: room.mode });
         io.to(code).emit('task_update', { index: 0, data: clientTaskFor(room) });
@@ -1825,6 +1841,7 @@ io.on('connection', (socket) => {
         const room = rooms[code];
         if (!room || socket.id !== room.host) return;
 
+        room.acceptingAnswers = false;
         io.to(code).emit('round_ended', { reason: 'TIMEOUT', index: room.taskIndex });
         if (room.mode === 'auto') {
             if (room.autoAdvanceTimer) clearTimeout(room.autoAdvanceTimer);
@@ -1848,6 +1865,7 @@ io.on('connection', (socket) => {
         const player = room.players?.[socket.id];
         if (!player || player.role === 'host') return;
         if (!room.currentTask) return;
+        if (!room.acceptingAnswers) return socket.emit('answer_rejected', { reason: 'ROUND_CLOSED' });
         if (!Number.isInteger(data?.taskIndex) || data.taskIndex !== room.taskIndex) {
             return socket.emit('answer_rejected', { reason: 'STALE_TASK' });
         }
@@ -1863,7 +1881,7 @@ io.on('connection', (socket) => {
 
         const submitted = Number(data?.answer);
         const expected = Number(room.currentTask.answer);
-        const correct = Number.isInteger(submitted) && submitted === expected;
+        const correct = Number.isSafeInteger(submitted) && submitted === expected;
 
         const stat = room.sessionStats[player.uid] || (room.sessionStats[player.uid] = {
             uid: player.uid,
