@@ -91,7 +91,7 @@ const KYU_VERSION = 6;
 // Wersja całej aplikacji + data i godzina ostatnich zmian. Podbij przy każdej
 // istotnej zmianie — trafia do stopki PDF, więc łatwo śledzić, z której wersji
 // aplikacji pochodzi wydrukowany arkusz.
-const APP_VERSION = '7.5 Multiplayer Classroom';
+const APP_VERSION = '7.6 Responsive App Shell';
 const APP_UPDATED = '2026-09-28';
 
 // Lista dostępnych prędkości flash (sekundy) — jak w soroban-schule.
@@ -224,34 +224,7 @@ const app = {
         document.getElementById('game-terms').addEventListener('input', () => this.updateRoundConfigInfo());
         this.updateGameInfo();
 
-        // --- MOBILE NAV GESTURES ---
-        const sb = document.querySelector('.sidebar');
-        if (sb) {
-            sb.classList.add('visible'); // Show by default
-            let startY = 0;
-
-            document.body.addEventListener('touchstart', (e) => {
-                startY = e.touches[0].clientY;
-            }, { passive: true });
-
-            document.body.addEventListener('touchmove', (e) => {
-                // Optional: track continuous movement
-            }, { passive: true });
-
-            document.body.addEventListener('touchend', (e) => {
-                const endY = e.changedTouches[0].clientY;
-                const diff = startY - endY;
-
-                // Swipe UP (diff > 50) -> SHOW sidebar
-                if (diff > 50) {
-                    sb.classList.add('visible');
-                }
-                // Swipe DOWN (diff < -50) -> HIDE sidebar
-                else if (diff < -50) {
-                    sb.classList.remove('visible');
-                }
-            }, { passive: true });
-        }
+        initMobileShell();
     },
 
     save: function () {
@@ -1870,4 +1843,77 @@ function nav(id) {
     } else {
         alert('Błąd: Nie znaleziono ekranu o ID: ' + targetId);
     }
+    updateNavigationState(id);
+}
+
+const MOBILE_PAGE_LABELS = {
+    dashboard: 'Pulpit', profile: 'Profil', flash: 'Flash Anzan', spoken: 'Trening głosowy',
+    worksheet: 'Arkusze', multiplayer: 'Klasa i multiplayer', 'school-operations': 'Plan szkoły', settings: 'Ustawienia'
+};
+let mobileMenuLastFocus = null;
+
+function updateNavigationState(id) {
+    const directMobileTargets = new Set(['dashboard', 'flash', 'multiplayer']);
+    document.querySelectorAll('.mobile-nav-item').forEach(button => {
+        const target = button.dataset.mobileTarget;
+        const active = target ? target === id : !directMobileTargets.has(id);
+        button.classList.toggle('is-active', active);
+        if (active) button.setAttribute('aria-current', 'page');
+        else button.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('.primary-nav .nav-item').forEach(item => {
+        const action = item.getAttribute('onclick') || '';
+        item.classList.toggle('active', action.includes(`'${id}'`));
+    });
+    const title = document.getElementById('mobile-page-title');
+    if (title) title.innerText = MOBILE_PAGE_LABELS[id] || 'Flash Anzan';
+}
+
+function mobileNavigate(id) {
+    toggleMobileMenu(false);
+    nav(id);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+function toggleMobileMenu(forceOpen) {
+    const menu = document.getElementById('mobile-more-menu');
+    const backdrop = document.getElementById('mobile-menu-backdrop');
+    const trigger = document.getElementById('mobile-more-trigger');
+    if (!menu || !backdrop || !trigger) return;
+    const open = typeof forceOpen === 'boolean' ? forceOpen : !menu.classList.contains('is-open');
+    if (open) mobileMenuLastFocus = document.activeElement;
+    menu.classList.toggle('is-open', open);
+    backdrop.classList.toggle('is-open', open);
+    menu.setAttribute('aria-hidden', String(!open));
+    backdrop.setAttribute('aria-hidden', String(!open));
+    trigger.setAttribute('aria-expanded', String(open));
+    document.body.classList.toggle('mobile-menu-open', open);
+    const content = document.querySelector('.main-content');
+    const mobileNav = document.querySelector('.mobile-nav');
+    if (content) content.inert = open;
+    if (mobileNav) mobileNav.inert = open;
+    if (open) requestAnimationFrame(() => document.getElementById('mobile-more-title')?.focus());
+    else if (mobileMenuLastFocus && typeof mobileMenuLastFocus.focus === 'function') mobileMenuLastFocus.focus();
+}
+
+function initMobileShell() {
+    if (document.body.dataset.mobileShellReady === 'true') return;
+    document.body.dataset.mobileShellReady = 'true';
+    document.addEventListener('keydown', event => {
+        const menu = document.getElementById('mobile-more-menu');
+        if (!menu || !menu.classList.contains('is-open')) return;
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            toggleMobileMenu(false);
+            return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(menu.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
+    updateNavigationState('dashboard');
 }

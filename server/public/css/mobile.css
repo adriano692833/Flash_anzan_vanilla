@@ -211,3 +211,466 @@
         grid-column: auto;
     }
 }
+
+/* Mobile/tablet application shell — jeden system nawigacji zamiast dwóch. */
+@media (max-width: 1024px) {
+    html {
+        scroll-padding-top: 68px;
+    }
+
+    body {
+        min-height: 100dvh;
+        overscroll-behavior-y: none;
+    }
+
+    .app-container {
+        display: block;
+        min-height: 100dvh;
+    }
+
+    .sidebar,
+    .sidebar.visible {
+        display: none !important;
+        transform: none;
+    }
+
+    .main-content {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        padding: calc(64px + 1.25rem) clamp(1rem, 3vw, 2rem) calc(76px + env(safe-area-inset-bottom, 0px));
+        overflow: clip;
+    }
+
+    .mobile-topbar {
+        position: fixed;
+        z-index: 1050;
+        top: 0;
+        right: 0;
+        left: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: calc(58px + env(safe-area-inset-top, 0px));
+        padding: env(safe-area-inset-top, 0px) clamp(1rem, 3vw, 2rem) 0;
+        color: var(--text-main);
+        background: rgba(9, 15, 21, 0.94);
+        border-bottom: 1px solid #2b3843;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+    }
+
+    .mobile-topbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        color: var(--paper);
+        font: 700 0.78rem 'IBM Plex Sans', sans-serif;
+        letter-spacing: 0.08em;
+    }
+
+    .mobile-topbar-brand img {
+        width: 30px;
+        height: 30px;
+    }
+
+    #mobile-page-title {
+        max-width: 48vw;
+        overflow: hidden;
+        color: #aeb9c1;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mobile-nav {
+        position: fixed;
+        z-index: 1100;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        height: calc(64px + env(safe-area-inset-bottom, 0px));
+        padding: 0 max(0.5rem, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(0.5rem, env(safe-area-inset-left, 0px));
+        color: #9eabb7;
+        background: rgba(8, 14, 20, 0.97);
+        border-top: 1px solid #34414c;
+        box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+    }
+
+    .mobile-nav-item {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        min-height: 56px;
+        padding: 0.4rem 0.25rem 0.35rem;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 0.15rem;
+        color: inherit;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        font: 500 0.68rem/1.1 'IBM Plex Sans', sans-serif;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+    }
+
+    .mobile-nav-item::before {
+        position: absolute;
+        top: 0;
+        width: 32px;
+        height: 2px;
+        content: '';
+        background: transparent;
+    }
+
+    .mobile-nav-item.is-active,
+    .mobile-nav-item[aria-current="page"] {
+        color: #fff;
+    }
+
+    .mobile-nav-item.is-active::before,
+    .mobile-nav-item[aria-current="page"]::before {
+        background: var(--primary);
+    }
+
+    .mobile-nav-icon {
+        color: currentColor;
+        font: 600 1.08rem/1 'Noto Sans JP', sans-serif;
+    }
+
+    .mobile-menu-backdrop {
+        position: fixed;
+        z-index: 1190;
+        inset: 0;
+        display: block;
+        visibility: hidden;
+        background: rgba(0, 0, 0, 0.62);
+        opacity: 0;
+        transition: opacity 180ms ease, visibility 180ms ease;
+    }
+
+    .mobile-menu-backdrop.is-open {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .mobile-more-menu {
+        position: fixed;
+        z-index: 1200;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: block;
+        max-height: min(78dvh, 620px);
+        padding: 0.55rem clamp(1rem, 4vw, 2rem) calc(1rem + env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
+        color: var(--text-main);
+        background: #0e171f;
+        border: 1px solid #34414c;
+        border-bottom: 0;
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -24px 64px rgba(0, 0, 0, 0.5);
+        transform: translateY(105%);
+        transition: transform 220ms cubic-bezier(.22,.8,.3,1);
+    }
+
+    .mobile-more-menu.is-open {
+        transform: translateY(0);
+    }
+
+    .mobile-menu-handle {
+        width: 42px;
+        height: 4px;
+        margin: 0 auto 0.8rem;
+        background: #54626e;
+        border-radius: 999px;
+    }
+
+    .mobile-menu-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+
+    .mobile-menu-header h2 {
+        margin: 0.2rem 0 0;
+        font-size: 1.3rem;
+    }
+
+    .mobile-menu-close {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        place-items: center;
+        color: var(--text-main);
+        background: #17222c;
+        border: 1px solid #354553;
+        border-radius: 50%;
+        font-size: 1.55rem;
+    }
+
+    .mobile-menu-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1px;
+        overflow: hidden;
+        background: #2a3742;
+        border: 1px solid #2a3742;
+        border-radius: 10px;
+    }
+
+    .mobile-menu-grid button {
+        display: flex;
+        min-width: 0;
+        min-height: 92px;
+        padding: 0.8rem 0.35rem;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 0.45rem;
+        color: var(--text-main);
+        background: #121c25;
+        border: 0;
+        border-radius: 0;
+        font-family: 'IBM Plex Sans', sans-serif;
+        touch-action: manipulation;
+    }
+
+    .mobile-menu-grid button:active {
+        background: #1b2833;
+    }
+
+    .mobile-menu-grid button > span {
+        color: var(--secondary);
+        font: 600 1.25rem 'Noto Sans JP', sans-serif;
+    }
+
+    .mobile-menu-grid button > b {
+        overflow: hidden;
+        font-size: 0.76rem;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mobile-menu-grid .mobile-menu-logout,
+    .mobile-menu-grid .mobile-menu-logout > span {
+        color: #e58a7f;
+    }
+
+    body.mobile-menu-open {
+        overflow: hidden;
+    }
+
+    .screen,
+    .glass-card,
+    .report-panel,
+    .custom-preset-card {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .report-table-wrap,
+    .table-scroll,
+    .admin-table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .ops-inline {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    .ops-inline > * {
+        min-width: min(100%, 180px);
+    }
+
+    input,
+    select,
+    textarea,
+    .input-lg {
+        max-width: 100%;
+        font-size: 16px;
+    }
+
+    #game-container > div {
+        width: 100%;
+    }
+
+    #game-run .glass-card {
+        min-height: min(62dvh, 560px) !important;
+    }
+
+    .number-display {
+        min-height: 38dvh;
+        font-size: clamp(4.5rem, 20vw, 9rem);
+    }
+
+    .custom-config-modal {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .custom-config-dialog {
+        width: 100%;
+        max-width: none !important;
+        max-height: 90dvh;
+        margin: 0;
+        border-right: 0;
+        border-bottom: 0;
+        border-left: 0;
+        border-radius: 18px 18px 0 0;
+        padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+    .mode-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .mode-card,
+    .mode-card:nth-child(4),
+    .mode-card:nth-child(5) {
+        grid-column: auto;
+    }
+
+    .custom-config-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .custom-field--wide {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 640px) {
+    .main-content {
+        padding-right: 0.85rem;
+        padding-left: 0.85rem;
+    }
+
+    .dashboard-hero {
+        min-height: auto;
+        padding: 1.2rem;
+    }
+
+    .dashboard-hero h1 {
+        font-size: clamp(1.95rem, 10vw, 2.7rem);
+    }
+
+    .training-stats,
+    .report-kpis,
+    .admin-kpi-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .mode-grid,
+    .custom-config-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .mode-card,
+    .mode-card:nth-child(4),
+    .mode-card:nth-child(5) {
+        grid-column: auto;
+        min-height: 88px;
+    }
+
+    .mobile-menu-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .mobile-menu-grid button {
+        min-height: 82px;
+    }
+
+    .btn {
+        min-height: 44px;
+    }
+
+    .main-content div[style*="display:flex"] > .btn,
+    .email-verification-banner .btn {
+        width: auto;
+        flex: 0 0 auto;
+        margin-bottom: 0;
+    }
+
+    .custom-config-actions .btn {
+        width: 100%;
+    }
+
+    #game-input > div {
+        grid-template-columns: 1fr !important;
+        gap: 0.5rem !important;
+    }
+
+    #game-cancel-btn {
+        top: 0.75rem !important;
+        left: 0.75rem !important;
+        width: auto;
+    }
+
+    #game-counter {
+        top: 1rem !important;
+        max-width: 55%;
+        font-size: 0.7rem;
+        text-align: right;
+    }
+
+    .toast-container {
+        right: 0.75rem;
+        left: 0.75rem;
+    }
+
+    .toast-item {
+        width: 100%;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 900px) {
+    #login-gate {
+        display: block;
+        padding: 1.5rem;
+    }
+
+    .login-story {
+        min-height: 380px;
+        margin-bottom: 1rem;
+    }
+
+    #login-gate .login-card {
+        width: 100%;
+        max-width: 620px;
+        margin: 0 auto;
+    }
+}
+
+@media (max-width: 380px) {
+    .mobile-topbar-brand span {
+        display: none;
+    }
+
+    .mobile-nav-item {
+        font-size: 0.62rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mobile-menu-backdrop,
+    .mobile-more-menu {
+        transition: none;
+    }
+}

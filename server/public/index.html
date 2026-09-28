@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0a0f15">
     <meta name="description" content="Flash Anzan — nowoczesna platforma treningu sorobanu i matematyki mentalnej dla szkół.">
     <title>Flash Anzan — trening sorobanu dla szkół</title>
@@ -126,6 +126,10 @@
         </aside>
 
         <main class="main-content">
+            <header class="mobile-topbar">
+                <div class="mobile-topbar-brand"><img src="icons/anzan-pro.svg" alt="" width="32" height="32"><span>FLASH ANZAN</span></div>
+                <strong id="mobile-page-title">Pulpit</strong>
+            </header>
             <div id="email-verification-banner" class="email-verification-banner" style="display:none;" role="status">
                 <div><b>Potwierdź swój adres e-mail</b><span>Sprawdź także Spam. Po potwierdzeniu wyloguj się i zaloguj ponownie.</span></div>
                 <button class="btn btn-secondary" onclick="app.auth.sendVerificationEmail()">Wyślij wiadomość ponownie</button>
@@ -774,15 +778,26 @@
 
         </main>
 
-        <div class="mobile-nav">
-            <div class="mobile-nav-item" onclick="nav('dashboard')" aria-label="Pulpit">本</div>
-            <div class="mobile-nav-item" onclick="nav('flash')" aria-label="Flash">速</div>
-            <div class="mobile-nav-item" onclick="nav('spoken')" aria-label="Głosowy">声</div>
-            <div class="mobile-nav-item" onclick="nav('worksheet')" aria-label="Arkusz">紙</div>
-            <div class="mobile-nav-item" onclick="nav('school-operations')" aria-label="Plan szkoły">校</div>
-            <div class="mobile-nav-item" onclick="nav('settings')" aria-label="Ustawienia">設</div>
-            <div class="mobile-nav-item" onclick="app.auth.logout()" aria-label="Wyloguj" title="Wyloguj">出</div>
-        </div>
+        <nav class="mobile-nav" aria-label="Główna nawigacja mobilna">
+            <button class="mobile-nav-item is-active" type="button" data-mobile-target="dashboard" onclick="mobileNavigate('dashboard')" aria-current="page"><span class="mobile-nav-icon">⌂</span><span>Pulpit</span></button>
+            <button class="mobile-nav-item" type="button" data-mobile-target="flash" onclick="mobileNavigate('flash')"><span class="mobile-nav-icon">速</span><span>Flash</span></button>
+            <button class="mobile-nav-item" type="button" data-mobile-target="multiplayer" onclick="mobileNavigate('multiplayer')"><span class="mobile-nav-icon">組</span><span>Klasa</span></button>
+            <button id="mobile-more-trigger" class="mobile-nav-item" type="button" onclick="toggleMobileMenu(true)" aria-haspopup="dialog" aria-controls="mobile-more-menu" aria-expanded="false"><span class="mobile-nav-icon">☰</span><span>Więcej</span></button>
+        </nav>
+
+        <div id="mobile-menu-backdrop" class="mobile-menu-backdrop" onclick="toggleMobileMenu(false)" aria-hidden="true"></div>
+        <section id="mobile-more-menu" class="mobile-more-menu" role="dialog" aria-modal="true" aria-labelledby="mobile-more-title" aria-hidden="true">
+            <div class="mobile-menu-handle" aria-hidden="true"></div>
+            <div class="mobile-menu-header"><div><span class="eyebrow-label">NAWIGACJA</span><h2 id="mobile-more-title" tabindex="-1">Więcej</h2></div><button class="mobile-menu-close" type="button" onclick="toggleMobileMenu(false)" aria-label="Zamknij menu">×</button></div>
+            <div class="mobile-menu-grid">
+                <button type="button" onclick="mobileNavigate('profile')"><span>人</span><b>Profil</b></button>
+                <button type="button" onclick="mobileNavigate('spoken')"><span>声</span><b>Głosowy</b></button>
+                <button type="button" onclick="mobileNavigate('worksheet')"><span>紙</span><b>Arkusze</b></button>
+                <button type="button" onclick="mobileNavigate('school-operations')"><span>校</span><b>Plan szkoły</b></button>
+                <button type="button" onclick="mobileNavigate('settings')"><span>設</span><b>Ustawienia</b></button>
+                <button type="button" class="mobile-menu-logout" onclick="toggleMobileMenu(false); app.auth.logout()"><span>出</span><b>Wyloguj</b></button>
+            </div>
+        </section>
     </div>
 
     <div id="survival-setup-modal" class="custom-config-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="survival-setup-title">

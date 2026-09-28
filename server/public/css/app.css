@@ -230,6 +230,12 @@ input[type=number] {
     display: none;
 }
 
+.mobile-topbar,
+.mobile-menu-backdrop,
+.mobile-more-menu {
+    display: none;
+}
+
 .toast-item.info {
     background: var(--accent);
     color: black;
