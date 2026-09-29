@@ -547,10 +547,10 @@
                         <label id="ops-invite-student-field" style="display:none"><span>Uczeń</span><select id="ops-invite-student" class="input-lg"></select></label>
                         <label><span>Liczba kodów</span><input id="ops-invite-count" type="number" min="1" max="30" value="1" class="input-lg"></label>
                         <label><span>Ważność (dni)</span><input id="ops-invite-days" type="number" min="1" max="30" value="7" class="input-lg"></label>
-                        <label><span>E-mail adresata</span><input id="ops-invite-email" type="email" class="input-lg" placeholder="opcjonalnie dla jednego kodu"></label>
+                        <label><span>E-mail adresata</span><input id="ops-invite-email" type="email" class="input-lg" placeholder="opcjonalnie dla jednego kodu"><small class="field-help">Wiadomość zostanie wysłana tylko wtedy, gdy panel potwierdzi status „Wysłano”.</small></label>
                         <label><span>Telefon adresata</span><input id="ops-invite-phone" type="tel" class="input-lg" placeholder="opcjonalnie"></label>
                     </div>
-                    <button class="btn btn-primary" onclick="app.schoolOps.createInvites()">Wygeneruj bezpieczne kody</button>
+                    <button class="btn btn-primary" onclick="app.schoolOps.createInvites()">Utwórz i wyślij zaproszenie</button>
                     <div id="ops-new-invites" class="ops-code-results"></div>
                     <h3>Ostatnie zaproszenia</h3>
                     <div id="ops-invites-list" class="ops-list"></div>

@@ -31,6 +31,7 @@ const {
     findClassForMember,
     isClassMember,
     createInvitations,
+    markInvitationDelivery,
     getInvitation,
     claimInvitation,
     listInvitations,
@@ -51,6 +52,7 @@ const {
     listAuditLogs,
     healthCheck
 } = require('./firestore');
+const { sendInvitationEmail } = require('./mailer');
 
 // Wspólny generator zadań (to samo źródło co frontend) — gwarantuje, że gra
 // sieciowa produkuje zadania merytorycznie poprawne, identyczne jak w trybie solo.
@@ -558,7 +560,9 @@ function publicInvitation(invite) {
         status: invite.status || 'active',
         expiresAt: timestampIso(invite.expiresAt),
         createdAt: timestampIso(invite.createdAt),
-        usedAt: timestampIso(invite.usedAt)
+        usedAt: timestampIso(invite.usedAt),
+        deliveryStatus: invite.deliveryStatus || (invite.contactEmail ? 'not_configured' : 'not_requested'),
+        deliveredAt: timestampIso(invite.deliveredAt)
     };
 }
 
@@ -1238,7 +1242,9 @@ io.on('connection', (socket) => {
             if (!student) return socket.emit('error_msg', 'Nie znaleziono ucznia.');
         }
         try {
+            const school = await getSchool(socket.data.schoolId);
             const expiresAt = new Date(Date.now() + days * 86400000);
+            const registrationBase = `${String(process.env.PUBLIC_APP_URL || 'https://anzan-web.ew.r.appspot.com').replace(/\/$/, '')}/?auth=register&invite=`;
             const generated = [];
             const records = [];
             for (let i = 0; i < count; i++) {
@@ -1247,16 +1253,41 @@ io.on('connection', (socket) => {
                 records.push({
                     codeHash: invitationHash(code), role, schoolId: socket.data.schoolId,
                     classId: cls?.id || '', studentUid: student?.uid || '',
+                    schoolName: school?.name || '',
                     contactEmail: email, contactPhone: phone,
                     createdBy: socket.uid, createdByName: socket.data.name, expiresAt
                 });
             }
             await createInvitations(records);
             await auditLog(socket.data.schoolId, socket.uid, 'invitation.created', { role, count, classId: cls?.id || '' });
+            let deliveryStatus = email ? 'not_configured' : 'not_requested';
+            if (email && generated.length === 1) {
+                try {
+                    const result = await sendInvitationEmail({
+                        to: email,
+                        roleLabel: ({ teacher: 'nauczyciel', student: 'uczeń', guardian: 'opiekun' })[role],
+                        schoolName: school?.name || 'Szkoła Flash Anzan',
+                        inviterName: socket.data.name,
+                        expiresAt,
+                        registrationLink: registrationBase + encodeURIComponent(generated[0])
+                    });
+                    deliveryStatus = result.status;
+                    await markInvitationDelivery(records[0].codeHash, deliveryStatus);
+                    await auditLog(socket.data.schoolId, socket.uid, `invitation.email_${deliveryStatus}`, { role });
+                    console.info(`[invitation-email] ${deliveryStatus} for invite:`, records[0].codeHash.slice(0, 8));
+                } catch (mailError) {
+                    deliveryStatus = 'failed';
+                    await markInvitationDelivery(records[0].codeHash, deliveryStatus).catch(() => { });
+                    await auditLog(socket.data.schoolId, socket.uid, 'invitation.email_failed', { role }).catch(() => { });
+                    console.warn('[invitation-email] failed:', mailError.code || mailError.message);
+                }
+            }
             socket.emit('invitations_created', {
                 role, codes: generated, className: cls?.name || '',
                 expiresAt: expiresAt.toISOString(),
-                registrationBase: `${String(process.env.PUBLIC_APP_URL || 'https://anzan-web.ew.r.appspot.com').replace(/\/$/, '')}/?auth=register&invite=`
+                registrationBase,
+                contactEmail: email,
+                deliveryStatus
             });
             const all = await listInvitations(socket.data.schoolId);
             socket.emit('invitations_list', { invitations: all.map(publicInvitation) });

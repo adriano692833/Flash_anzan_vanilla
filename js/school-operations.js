@@ -29,6 +29,9 @@
     function statusLabel(status) {
         return ({ active: 'Aktywne', used: 'Wykorzystane', revoked: 'Unieważnione' })[status] || status;
     }
+    function deliveryLabel(status) {
+        return ({ sent: 'E-mail wysłany', failed: 'Błąd wysyłki — przekaż link ręcznie', not_configured: 'E-mail niewysłany — wysyłka nie jest skonfigurowana', pending: 'Wysyłanie…', not_requested: 'Do przekazania ręcznie' })[status] || 'Do przekazania ręcznie';
+    }
     function eventDateLabel(event) {
         const days = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'];
         return event.kind === 'weekly'
@@ -153,10 +156,12 @@
         renderNewInvites: function (data) {
             const box = document.getElementById('ops-new-invites'); if (!box) return;
             const expires = new Date(data.expiresAt).toLocaleString('pl-PL');
-            box.innerHTML = `<div class="ops-result-title">Gotowe · ${he(roleLabel(data.role))} · ważne do ${he(expires)}</div>${(data.codes || []).map(code => {
+            const delivery = data.deliveryStatus || 'not_requested';
+            const deliveryClass = delivery === 'sent' ? 'is-sent' : (data.contactEmail ? 'is-failed' : 'is-manual');
+            box.innerHTML = `<div class="ops-result-title">Gotowe · ${he(roleLabel(data.role))} · ważne do ${he(expires)}</div><div class="ops-delivery-status ${deliveryClass}"><b>${he(deliveryLabel(delivery))}</b>${data.contactEmail ? `<span>${he(data.contactEmail)}</span>` : '<span>Skopiuj bezpieczny link i przekaż go adresatowi.</span>'}</div>${(data.codes || []).map(code => {
                 const link = `${data.registrationBase}${encodeURIComponent(code)}`;
                 return `<div class="ops-code"><strong>${he(code)}</strong><span><button class="btn btn-secondary" onclick="app.schoolOps.copy('${he(code)}')">Kopiuj kod</button><button class="btn btn-secondary" onclick="app.schoolOps.copy('${he(link)}')">Kopiuj link</button></span></div>`;
-            }).join('')}<p class="field-help">To jedyny moment, gdy pełne kody są widoczne. Skopiuj je teraz; wysyłka e-mail/SMS wymaga późniejszego podłączenia dostawcy.</p>`;
+            }).join('')}<p class="field-help"><strong>To jedyny moment, gdy pełny kod jest widoczny.</strong> Zachowaj link nawet wtedy, gdy e-mail został wysłany — będzie potrzebny, jeśli dostawca poczty odrzuci wiadomość.</p>`;
         },
         copy: function (text) {
             navigator.clipboard.writeText(text).then(() => app.ui.toast('Skopiowano.', 'success')).catch(() => app.ui.toast('Nie udało się skopiować.', 'error'));
@@ -164,7 +169,7 @@
         renderInvites: function () {
             const box = document.getElementById('ops-invites-list'); if (!box) return;
             const list = [...this.invitations].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 30);
-            box.innerHTML = list.length ? list.map(item => `<div class="ops-row"><div><b>${he(roleLabel(item.role))}</b><span>${he(statusLabel(item.status))} · wygasa ${he(item.expiresAt ? new Date(item.expiresAt).toLocaleDateString('pl-PL') : '—')}${item.contactEmail ? ' · ' + he(item.contactEmail) : ''}</span></div>${item.status === 'active' ? `<button class="btn btn-danger" onclick="app.schoolOps.revokeInvite('${he(item.id)}')">Unieważnij</button>` : ''}</div>`).join('') : '<div class="ops-empty">Brak zaproszeń.</div>';
+            box.innerHTML = list.length ? list.map(item => `<div class="ops-row"><div><b>${he(roleLabel(item.role))}</b><span>${he(statusLabel(item.status))} · wygasa ${he(item.expiresAt ? new Date(item.expiresAt).toLocaleDateString('pl-PL') : '—')}${item.contactEmail ? ' · ' + he(item.contactEmail) : ''}</span><small class="ops-delivery-inline ${item.deliveryStatus === 'sent' ? 'is-sent' : ''}">${he(deliveryLabel(item.deliveryStatus))}</small></div>${item.status === 'active' ? `<button class="btn btn-danger" onclick="app.schoolOps.revokeInvite('${he(item.id)}')">Unieważnij</button>` : ''}</div>`).join('') : '<div class="ops-empty">Brak zaproszeń.</div>';
         },
         revokeInvite: function (id) { if (confirm('Unieważnić to zaproszenie?')) this.socket().emit('revoke_invitation', { inviteId: id }); },
         updateScheduleForm: function () {

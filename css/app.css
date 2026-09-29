@@ -1092,6 +1092,11 @@ input[type=number] {
 
 .ops-code-results { margin: 1rem 0; }
 .ops-result-title { margin-bottom: 0.5rem; color: var(--accent); font-weight: 800; }
+.ops-delivery-status { display: flex; justify-content: space-between; gap: 1rem; margin: 0.65rem 0; padding: 0.8rem 1rem; border: 1px solid #76502c; border-left: 4px solid var(--warning); background: #251d13; color: #f8dfae; }
+.ops-delivery-status.is-sent { border-color: #2c735e; border-left-color: var(--success); background: #10251f; color: #a8ead5; }
+.ops-delivery-status span { color: inherit; opacity: 0.82; }
+.ops-delivery-inline { color: #f2ba75 !important; font-weight: 700; }
+.ops-delivery-inline.is-sent { color: #77d8b9 !important; }
 .ops-code strong { color: var(--accent); letter-spacing: 0.08em; font-size: 1.05rem; }
 .ops-code > span { display: flex; gap: 0.4rem; }
 

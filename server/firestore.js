@@ -353,12 +353,21 @@ async function createInvitations(items) {
             contactPhone: item.contactPhone || '',
             createdBy: item.createdBy,
             createdByName: item.createdByName || '',
+            deliveryStatus: item.contactEmail ? 'pending' : 'not_requested',
             status: 'active',
             expiresAt: Firestore.Timestamp.fromDate(item.expiresAt),
             createdAt: Firestore.FieldValue.serverTimestamp()
         });
     });
     await batch.commit();
+}
+
+async function markInvitationDelivery(inviteId, status) {
+    const allowed = new Set(['sent', 'failed', 'not_configured']);
+    if (!inviteId || !allowed.has(status)) throw new Error('INVALID_DELIVERY_STATUS');
+    const update = { deliveryStatus: status, deliveryUpdatedAt: Firestore.FieldValue.serverTimestamp() };
+    if (status === 'sent') update.deliveredAt = Firestore.FieldValue.serverTimestamp();
+    await db.collection('invitations').doc(inviteId).set(update, { merge: true });
 }
 
 async function getInvitation(codeHash) {
@@ -552,6 +561,7 @@ module.exports = {
     saveClassSession,
     listClassSessions,
     createInvitations,
+    markInvitationDelivery,
     getInvitation,
     claimInvitation,
     listInvitations,

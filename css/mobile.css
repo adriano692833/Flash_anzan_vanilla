@@ -1,4 +1,5 @@
 @media (max-width: 768px) {
+    .ops-delivery-status { align-items: flex-start; flex-direction: column; gap: 0.2rem; }
     #login-gate {
         display: block;
         padding: 1rem;
